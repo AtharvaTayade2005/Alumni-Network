@@ -12,12 +12,15 @@
     "dev": "node --watch server.js",
     "lint": "eslint .",
     "migrate": "node src/scripts/migrate.js",
+    "migrate:down": "node src/scripts/migrate.js --down",
     "migrate:status": "node src/scripts/migrate-status.js",
     "seed": "node src/scripts/seed.js",
+    "seed:users": "node src/scripts/seed-dev-users.js",
     "db:reset": "node src/scripts/reset-db.js",
     "dev:db": "node scripts/dev-postgres.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
-    "test:watch": "node --test --watch \"tests/**/*.test.js\""
+    "test:watch": "node --test --watch \"tests/**/*.test.js\"",
+    "smoke": "node scripts/smoke.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

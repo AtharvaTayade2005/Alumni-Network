@@ -100,8 +100,8 @@ export async function createRequest({
   return rows[0] ?? null
 }
 
-export async function updateRequestStatus(id, { status, responseNote }, db = query) {
-  const { rows } = await db(
+export async function updateRequestStatus(id, { status, responseNote }, db = { query }) {
+  const { rows } = await db.query(
     `UPDATE mentorship_requests
      SET status = $2, response_note = $3, responded_at = NOW(), updated_at = NOW()
      WHERE id = $1
@@ -122,8 +122,8 @@ export async function cancelRequest(id) {
   return rows[0] ?? null
 }
 
-export async function createRelationship({ requestId, mentorId, menteeId }, db = query) {
-  const { rows } = await db(
+export async function createRelationship({ requestId, mentorId, menteeId }, db = { query }) {
+  const { rows } = await db.query(
     `INSERT INTO mentorship_relationships (request_id, mentor_id, mentee_id)
      VALUES ($1,$2,$3)
      ON CONFLICT (request_id) DO UPDATE SET status = 'active', ended_at = NULL
@@ -137,9 +137,13 @@ export async function createRelationship({ requestId, mentorId, menteeId }, db =
  * Locks the mentor's row and re-checks capacity. Accepting a request has to
  * confirm the mentor still has room, because the count at request time may be
  * stale by the time the mentor replies.
+ *
+ * `db` is a pg client supplied by the caller's transaction: the FOR UPDATE lock
+ * is only held for the life of that transaction, so this must run on the same
+ * client rather than on the shared pool.
  */
-export async function assertCapacityWithLock(mentorId, menteeId, db = query) {
-  const { rows } = await db(
+export async function assertCapacityWithLock(mentorId, menteeId, db = { query }) {
+  const { rows } = await db.query(
     `SELECT COALESCE(ap.mentorship_capacity, 1) AS capacity,
             (SELECT COUNT(*)::int FROM mentorship_relationships r
               WHERE r.mentor_id = $1 AND r.mentee_id <> $2 AND r.status = 'active') AS taken,

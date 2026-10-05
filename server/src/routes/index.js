@@ -8,6 +8,7 @@ import messageRoutes from './messageRoutes.js'
 import notificationRoutes from './notificationRoutes.js'
 import mentorshipRoutes from './mentorshipRoutes.js'
 import jobRoutes from './jobRoutes.js'
+import adminRoutes from './adminRoutes.js'
 import { csrfProtection, assertDatabaseAvailable } from '../middleware/security.js'
 import { notFound } from '../utils/errors.js'
 
@@ -30,6 +31,7 @@ router.use('/messages', messageRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/mentorship', mentorshipRoutes)
 router.use('/jobs', jobRoutes)
+router.use('/admin', adminRoutes)
 
 router.use((req) => {
   throw notFound(`Route ${req.method} ${req.originalUrl}`)

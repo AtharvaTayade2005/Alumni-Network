@@ -53,9 +53,15 @@ export function errorHandler(err, req, res, _next) {
     logger.warn('Request rejected', logContext)
   }
 
-  const body = { success: false, message, error: { code } }
-  if (details) body.errors = Array.isArray(details) ? details : [details]
-  if (!config.isProduction && statusCode >= 500) body.error.stack = err.stack
+  // The documented envelope is { success:false, error:{ code, message, details } }.
+  // `message` is also kept at the top level and details are mirrored to `errors`
+  // because the existing frontend error handling reads those two locations.
+  const error = { code, message }
+  if (details) error.details = Array.isArray(details) ? details : [details]
+  if (!config.isProduction && statusCode >= 500) error.stack = err.stack
+
+  const body = { success: false, message, error }
+  if (error.details) body.errors = error.details
 
   res.status(statusCode).json(body)
 }

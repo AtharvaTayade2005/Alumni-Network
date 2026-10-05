@@ -173,26 +173,72 @@ The API listens on `http://localhost:5000`. Environment variables are loaded fro
 | `npm start` | Start the server |
 | `npm run dev` | Start with Node's watch mode |
 | `npm run lint` | Run ESLint |
+| `npm run dev:db` | Start the bundled PGlite database (no PostgreSQL install needed) |
+| `npm run migrate` | Apply pending migrations |
+| `npm run migrate:status` | List applied and pending migrations |
+| `npm run migrate:down` | Roll back the most recent reversible migration |
+| `npm run db:reset` | Drop and rebuild the schema |
+| `npm run seed` | Insert roles and the development accounts |
+| `npm run seed:users` | Insert the development accounts only |
+| `npm test` | Run the integration suite |
+
+Further reading: [architecture](docs/backend/architecture.md),
+[authentication and RBAC](docs/backend/authentication.md),
+[database](docs/backend/database.md),
+[API reference](docs/api/authentication.md).
 
 ## 10. PostgreSQL Setup
 
-Option A, using Docker:
+Option A, bundled PGlite — no installation required:
+
+```bash
+cd server
+npm run dev:db      # starts on 127.0.0.1:54329
+```
+
+Option B, using Docker:
 
 ```bash
 docker compose up -d postgres
 ```
 
-Option B, using an existing local PostgreSQL server: create a database and set
+Option C, using an existing local PostgreSQL server: create a database and set
 `DATABASE_URL` in `.env`.
 
-Apply the initial schema:
+Apply the schema and load development data:
 
 ```bash
-psql "$DATABASE_URL" -f database/migrations/001_initial_schema.sql
+cd server
+npm run migrate
+npm run seed
 ```
 
-The API does not run migrations automatically yet. A migration runner will be
-added with the first feature.
+`npm run migrate` applies every file in `database/migrations/` that is not yet
+recorded in `schema_migrations`, one transaction per file. A migration is
+reversible when a sibling `<name>.down.sql` exists, and `npm run migrate:down`
+rolls back to the last reversible one. See
+[database.md](docs/backend/database.md).
+
+The seed creates three development accounts, all with the password
+`DevPassw0rd!`:
+
+| Role | Email |
+| --- | --- |
+| ADMIN | `admin@alumni.local` |
+| ALUMNI | `alumni@alumni.local` |
+| STUDENT | `student@alumni.local` |
+
+These credentials are deliberately predictable and the seeder refuses to run
+when `NODE_ENV=production`. Override them with the `SEED_*` variables in
+`.env.example`.
+
+In development, outbound mail is not sent. Verification and password-reset
+links are written to `email_queue` instead:
+
+```sql
+SELECT payload->>'link' FROM email_queue
+WHERE to_email = 'you@example.edu' ORDER BY created_at DESC LIMIT 1;
+```
 
 ## 11. Environment Variables
 

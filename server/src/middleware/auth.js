@@ -4,9 +4,16 @@ import { query } from '../config/database.js'
 import { unauthorized, forbidden } from '../utils/errors.js'
 import { hashToken } from '../utils/crypto.js'
 
+/**
+ * The payload is deliberately minimal. The subject identifies the account and
+ * `type` separates an access token from a refresh token; roles are read from the
+ * database on every request rather than trusted from the token, so nothing here
+ * can go stale. No email address or other personal data is carried, because a
+ * JWT is only ever base64 encoded, not encrypted.
+ */
 export function signAccessToken(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email, type: 'access' },
+    { sub: user.id, type: 'access' },
     config.jwt.accessSecret,
     {
       expiresIn: config.jwt.accessExpiresIn,
@@ -95,3 +102,10 @@ export async function authenticateSocket(socket, next) {
 }
 
 export { hashToken }
+
+/**
+ * Spec-named alias for `authenticate`. Both names are exported because the
+ * authentication middleware is referenced as `authenticate` where it verifies a
+ * token and as `requireAuth` where it guards a route.
+ */
+export const requireAuth = authenticate

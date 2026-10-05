@@ -3,7 +3,8 @@ import { query } from '../config/database.js'
 export const PUBLIC_USER_COLUMNS = `
   u.id, u.email, u.first_name, u.last_name, u.avatar_url,
   u.phone, u.is_email_verified, u.is_active, u.is_suspended,
-  u.last_login_at, u.created_at
+  u.last_login_at, u.created_at,
+  u.full_name, u.account_status
 `
 
 export const USER_ROLES_AGG = `

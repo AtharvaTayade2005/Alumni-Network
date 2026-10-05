@@ -41,7 +41,11 @@ export async function startTestDatabase() {
 
 async function applyScripts(kind) {
   const dir = path.join(repoRoot, 'database', kind)
-  const files = (await fs.readdir(dir)).filter((f) => f.endsWith('.sql')).sort()
+  const files = (await fs.readdir(dir))
+    // Rollback companions live beside their migration and are only ever applied
+    // by `npm run migrate:down`, never as part of the up sequence.
+    .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
+    .sort()
   for (const file of files) {
     const sql = await fs.readFile(path.join(dir, file), 'utf8')
     try {

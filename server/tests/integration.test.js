@@ -12,7 +12,10 @@ await startTestDatabase()
 
 const { default: app } = await import('../src/app.js')
 const { query, closePool } = await import('../src/config/database.js')
-const { hashPassword } = await import('../src/utils/crypto.js')
+const { hashPassword, generateToken, hashToken } = await import('../src/utils/crypto.js')
+const { signAccessToken } = await import('../src/middleware/auth.js')
+const jwtModule = await import('jsonwebtoken')
+const jwt = jwtModule.default ?? jwtModule
 
 let seq = 0
 const uniq = () => `${Date.now()}.${seq++}.${Math.floor(Math.random() * 1e6)}`
@@ -1532,13 +1535,562 @@ describe('health', () => {
   it('reports service and database status', async () => {
     const res = await request(app).get('/api/health')
     assert.equal(res.status, 200, JSON.stringify(res.body))
-    assert.equal(res.body.status, 'ok')
-    assert.equal(res.body.checks.database, 'connected')
+    assert.equal(res.body.success, true)
+    assert.equal(res.body.data.status, 'ok')
+    assert.equal(res.body.data.checks.database, 'connected')
+    assert.equal(res.body.data.environment, 'test')
+    assert.equal(typeof res.body.data.timestamp, 'string')
+    assert.ok(!Number.isNaN(Date.parse(res.body.data.timestamp)))
   })
 
   it('returns 404 for an unknown route', async () => {
     const res = await request(app).get('/api/definitely-not-a-route')
     assert.equal(res.status, 404)
     assert.equal(res.body.success, false)
+  })
+})
+
+// ============================================================
+// Backend Phase 1 - authentication, RBAC and database guarantees
+// ============================================================
+
+describe('phase 1: registration input rules', () => {
+  it('rejects a malformed email address', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        firstName: 'Bad', lastName: 'Email',
+        email: 'not-an-email', password: 'Str0ngPass!23',
+        role: 'ALUMNI', graduationYear: 2015, acceptTerms: true,
+      })
+    assert.equal(res.status, 422, JSON.stringify(res.body))
+    assert.equal(res.body.success, false)
+    assert.equal(res.body.error.code, 'UNPROCESSABLE')
+    assert.ok(res.body.error.details.some((d) => d.field === 'email'))
+  })
+
+  it('refuses to let anyone self-register as an administrator', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        firstName: 'Aspiring', lastName: 'Admin',
+        email: `admin.try.${uniq()}@example.edu`,
+        password: 'Str0ngPass!23', role: 'ADMIN',
+        graduationYear: 2015, acceptTerms: true,
+      })
+    assert.equal(res.status, 422, JSON.stringify(res.body))
+    assert.ok(res.body.error.details.some((d) => d.field === 'role'))
+
+    const { rows } = await query(
+      `SELECT COUNT(*)::int AS total FROM users
+       WHERE LOWER(email) LIKE 'admin.try.%@example.edu'`,
+    )
+    assert.equal(rows[0].total, 0, 'no account may be created for a rejected role')
+  })
+
+  it('reports the account as pending verification until the address is confirmed', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({
+        firstName: 'Fresh', lastName: 'Signup',
+        email: `pending.${uniq()}@example.edu`,
+        password: 'Str0ngPass!23', role: 'STUDENT', yearOfStudy: 2,
+        acceptTerms: true,
+      })
+    assert.equal(res.status, 201, JSON.stringify(res.body))
+
+    const user = res.body.data.user
+    assert.equal(user.accountStatus, 'PENDING_VERIFICATION')
+    assert.equal(user.fullName, 'Fresh Signup')
+    assert.equal(user.isEmailVerified, false)
+  })
+
+  it('moves the account to active once the address is verified', async () => {
+    const user = await createUser({ email: `verify.${uniq()}@example.edu` })
+    await query('UPDATE users SET is_email_verified = FALSE WHERE id = $1', [user.id])
+    const { rows: pending } = await query(
+      'SELECT account_status::text FROM users WHERE id = $1', [user.id],
+    )
+    assert.equal(pending[0].account_status, 'PENDING_VERIFICATION')
+
+    await query('UPDATE users SET is_email_verified = TRUE WHERE id = $1', [user.id])
+    const { rows: active } = await query(
+      'SELECT account_status::text FROM users WHERE id = $1', [user.id],
+    )
+    assert.equal(active[0].account_status, 'ACTIVE')
+  })
+
+  it('derives suspended and inactive ahead of verification state', async () => {
+    const user = await createUser({ email: `states.${uniq()}@example.edu` })
+    await query(
+      'UPDATE users SET is_email_verified = FALSE, is_suspended = TRUE WHERE id = $1',
+      [user.id],
+    )
+    const { rows } = await query(
+      'SELECT account_status::text FROM users WHERE id = $1', [user.id],
+    )
+    assert.equal(rows[0].account_status, 'SUSPENDED')
+  })
+})
+
+describe('phase 1: login account status', () => {
+  it('refuses a suspended account', async () => {
+    const user = await createUser({ email: `suspended.${uniq()}@example.edu` })
+    await query('UPDATE users SET is_suspended = TRUE WHERE id = $1', [user.id])
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password: user.password })
+    assert.equal(res.status, 403, JSON.stringify(res.body))
+  })
+
+  it('refuses a deactivated account', async () => {
+    const user = await createUser({ email: `inactive.${uniq()}@example.edu` })
+    await query('UPDATE users SET is_active = FALSE WHERE id = $1', [user.id])
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password: user.password })
+    assert.equal(res.status, 403, JSON.stringify(res.body))
+  })
+
+  it('records the last login time on a successful sign in', async () => {
+    const user = await createUser({ email: `lastlogin.${uniq()}@example.edu` })
+    const { rows: before } = await query(
+      'SELECT last_login_at FROM users WHERE id = $1', [user.id],
+    )
+    assert.equal(before[0].last_login_at, null)
+
+    await loginAs(user)
+    const { rows: after } = await query(
+      'SELECT last_login_at FROM users WHERE id = $1', [user.id],
+    )
+    assert.ok(after[0].last_login_at, 'last_login_at should be populated')
+  })
+})
+
+describe('phase 1: token handling', () => {
+  it('rejects an expired access token', async () => {
+    const user = await createUser({ email: `expired.${uniq()}@example.edu` })
+    // Signed with the same secret but already expired, so the failure is about
+    // the expiry claim rather than the signature.
+    const expired = jwt.sign(
+      { sub: user.id, sid: 'test' },
+      process.env.JWT_SECRET ?? 'dev-only-insecure-access-secret-change-me',
+      { expiresIn: '-1s' },
+    )
+    const res = await request(app).get('/api/auth/me').set(asAuth(expired))
+    assert.equal(res.status, 401, JSON.stringify(res.body))
+  })
+
+  it('never places personal data in the access token payload', async () => {
+    const user = await createUser({ email: `claims.${uniq()}@example.edu` })
+    const token = await loginAs(user)
+    const claims = jwt.decode(token)
+    const serialised = JSON.stringify(claims)
+    assert.ok(!serialised.includes(user.email), 'email must not be a claim')
+    assert.ok(!serialised.includes('password'), 'no credential material in claims')
+    assert.ok(claims.sub, 'a subject claim is expected')
+  })
+
+  it('rotates the refresh token and revokes the presented one', async () => {
+    const user = await createUser({ email: `rotate.${uniq()}@example.edu` })
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password: user.password })
+    assert.equal(login.status, 200, JSON.stringify(login.body))
+
+    const cookies = login.headers['set-cookie'] ?? []
+    const cookieHeader = cookies.map((c) => c.split(';')[0]).join('; ')
+    const csrf = decodeURIComponent(
+      cookies.find((c) => c.startsWith('csrf_token='))
+        .split(';')[0].slice('csrf_token='.length),
+    )
+    const originalRefresh = cookies
+      .find((c) => c.startsWith('refresh_token='))
+      .split(';')[0].slice('refresh_token='.length)
+
+    const refreshed = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookieHeader)
+      .set('x-csrf-token', csrf)
+    assert.equal(refreshed.status, 200, JSON.stringify(refreshed.body))
+
+    const rotated = (refreshed.headers['set-cookie'] ?? [])
+      .find((c) => c.startsWith('refresh_token='))
+    assert.ok(rotated, 'a replacement refresh cookie must be issued')
+    assert.notEqual(
+      decodeURIComponent(rotated.split(';')[0].slice('refresh_token='.length)),
+      decodeURIComponent(originalRefresh),
+      'the refresh token must change on rotation',
+    )
+
+    // Replaying the original token must fail: it was revoked by the rotation.
+    const replay = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookieHeader)
+      .set('x-csrf-token', csrf)
+    assert.equal(replay.status, 401, JSON.stringify(replay.body))
+  })
+
+  it('refuses a refresh token that was revoked by logout', async () => {
+    const user = await createUser({ email: `logout.${uniq()}@example.edu` })
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password: user.password })
+    const cookies = login.headers['set-cookie'] ?? []
+    const cookieHeader = cookies.map((c) => c.split(';')[0]).join('; ')
+    const csrf = decodeURIComponent(
+      cookies.find((c) => c.startsWith('csrf_token='))
+        .split(';')[0].slice('csrf_token='.length),
+    )
+
+    const out = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', cookieHeader)
+      .set('x-csrf-token', csrf)
+    assert.equal(out.status, 200, JSON.stringify(out.body))
+
+    const after = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookieHeader)
+      .set('x-csrf-token', csrf)
+    assert.equal(after.status, 401, JSON.stringify(after.body))
+  })
+
+  it('stores only a hash of the refresh token', async () => {
+    const user = await createUser({ email: `hashonly.${uniq()}@example.edu` })
+    await loginAs(user)
+    const { rows } = await query(
+      'SELECT token_hash FROM refresh_tokens WHERE user_id = $1', [user.id],
+    )
+    assert.ok(rows.length > 0)
+    for (const row of rows) {
+      assert.ok(!row.token_hash.includes(user.id), 'raw identifiers must not be stored')
+      assert.match(row.token_hash, /^[a-f0-9]{64}$/, 'expected a hex digest')
+    }
+  })
+
+  it('signs an access token that the auth middleware accepts', async () => {
+    const user = await createUser({ email: `signer.${uniq()}@example.edu` })
+    const token = signAccessToken({ id: user.id, roles: ['ALUMNI'] })
+    const res = await request(app).get('/api/auth/me').set(asAuth(token))
+    assert.equal(res.status, 200, JSON.stringify(res.body))
+    assert.equal(res.body.data.user.id, user.id)
+  })
+})
+
+describe('phase 1: password reset token lifecycle', () => {
+  async function issueResetToken(userId, { expiresAt }) {
+    const raw = generateToken()
+    await query(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3)`,
+      [userId, hashToken(raw), expiresAt],
+    )
+    return raw
+  }
+
+  it('rejects an expired reset token', async () => {
+    const user = await createUser({ email: `resetexpired.${uniq()}@example.edu` })
+    const raw = await issueResetToken(user.id, {
+      expiresAt: new Date(Date.now() - 60_000),
+    })
+    const res = await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token: raw, password: 'An0therPass!23' })
+    assert.equal(res.status, 400, JSON.stringify(res.body))
+  })
+
+  it('accepts a reset token once and refuses to reuse it', async () => {
+    const user = await createUser({ email: `resetreuse.${uniq()}@example.edu` })
+    const raw = await issueResetToken(user.id, {
+      expiresAt: new Date(Date.now() + 3_600_000),
+    })
+
+    const first = await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token: raw, password: 'An0therPass!23' })
+    assert.equal(first.status, 200, JSON.stringify(first.body))
+
+    const { rows } = await query(
+      'SELECT used_at FROM password_reset_tokens WHERE user_id = $1', [user.id],
+    )
+    assert.ok(rows[0].used_at, 'a consumed token must be stamped')
+
+    const second = await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token: raw, password: 'Y3tAnother!23' })
+    assert.equal(second.status, 400, JSON.stringify(second.body))
+
+    // The original password no longer works, the new one does.
+    const oldPassword = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password: user.password })
+    assert.equal(oldPassword.status, 401)
+    const newPassword = await request(app)
+      .post('/api/auth/login')
+      .send({ email: user.email, password: 'An0therPass!23' })
+    assert.equal(newPassword.status, 200, JSON.stringify(newPassword.body))
+  })
+
+  it('does not reveal whether an address is registered', async () => {
+    const res = await request(app)
+      .post('/api/auth/forgot-password')
+      .send({ email: `nobody.${uniq()}@example.edu` })
+    assert.equal(res.status, 200, JSON.stringify(res.body))
+    assert.match(res.body.message, /if that email is registered/i)
+  })
+})
+
+describe('phase 1: role based access control', () => {
+  it('rejects an anonymous request to an administrator endpoint', async () => {
+    const res = await request(app).get('/api/admin/users')
+    assert.equal(res.status, 401, JSON.stringify(res.body))
+    assert.equal(res.body.error.code, 'UNAUTHENTICATED')
+  })
+
+  it('rejects a signed-in student', async () => {
+    const user = await createUser({ role: 'STUDENT', email: `rbacstu.${uniq()}@example.edu` })
+    const res = await request(app).get('/api/admin/users').set(asAuth(await loginAs(user)))
+    assert.equal(res.status, 403, JSON.stringify(res.body))
+    assert.equal(res.body.error.code, 'FORBIDDEN')
+  })
+
+  it('rejects a signed-in alumni member', async () => {
+    const user = await createUser({ role: 'ALUMNI', email: `rbacalu.${uniq()}@example.edu` })
+    const res = await request(app).get('/api/admin/users').set(asAuth(await loginAs(user)))
+    assert.equal(res.status, 403, JSON.stringify(res.body))
+  })
+
+  it('allows an administrator through', async () => {
+    const admin = await createUser({ role: 'ADMIN', email: `rbacadm.${uniq()}@example.edu` })
+    const token = await loginAs(admin)
+    const res = await request(app).get('/api/admin/users').set(asAuth(token))
+    assert.equal(res.status, 200, JSON.stringify(res.body))
+    assert.equal(res.body.success, true)
+    assert.ok(Array.isArray(res.body.data))
+  })
+
+  it('decides access from the database role, not from anything the caller sends', async () => {
+    const student = await createUser({ role: 'STUDENT', email: `trust.${uniq()}@example.edu` })
+    const token = await loginAs(student)
+
+    // A forged role in the request body or header must not influence the check.
+    const forged = await request(app)
+      .get('/api/admin/users')
+      .set(asAuth(token))
+      .set('x-user-role', 'ADMIN')
+      .send({ role: 'ADMIN' })
+    assert.equal(forged.status, 403, JSON.stringify(forged.body))
+  })
+})
+
+describe('phase 1: administrator user management', () => {
+  let adminToken
+
+  before(async () => {
+    const admin = await createUser({ role: 'ADMIN', email: `um.${uniq()}@example.edu` })
+    adminToken = await loginAs(admin)
+  })
+
+  it('lists accounts with pagination metadata and no password hashes', async () => {
+    const res = await request(app)
+      .get('/api/admin/users?limit=5')
+      .set(asAuth(adminToken))
+    assert.equal(res.status, 200, JSON.stringify(res.body))
+    assert.ok(res.body.data.length <= 5)
+    assert.equal(res.body.meta.limit, 5)
+    assert.equal(typeof res.body.meta.total, 'number')
+    assert.ok(!JSON.stringify(res.body).includes('password_hash'))
+  })
+
+  it('filters by role and by account status', async () => {
+    const byRole = await request(app)
+      .get('/api/admin/users?role=STUDENT')
+      .set(asAuth(adminToken))
+    assert.equal(byRole.status, 200)
+    for (const row of byRole.body.data) {
+      assert.ok(row.roles.includes('STUDENT'))
+    }
+
+    const suspended = await createUser({ email: `umfilter.${uniq()}@example.edu` })
+    await query('UPDATE users SET is_suspended = TRUE WHERE id = $1', [suspended.id])
+
+    const byStatus = await request(app)
+      .get('/api/admin/users?status=SUSPENDED')
+      .set(asAuth(adminToken))
+    assert.equal(byStatus.status, 200)
+    assert.ok(byStatus.body.data.some((row) => row.id === suspended.id))
+  })
+
+  it('searches by name and email', async () => {
+    const target = await createUser({ email: `needle.${uniq()}@example.edu` })
+    const res = await request(app)
+      .get(`/api/admin/users?search=${encodeURIComponent(target.email)}`)
+      .set(asAuth(adminToken))
+    assert.equal(res.status, 200, JSON.stringify(res.body))
+    assert.ok(res.body.data.some((row) => row.id === target.id))
+  })
+
+  it('returns a single account and 404s for an unknown one', async () => {
+    const user = await createUser({ email: `umdetail.${uniq()}@example.edu` })
+
+    const found = await request(app)
+      .get(`/api/admin/users/${user.id}`)
+      .set(asAuth(adminToken))
+    assert.equal(found.status, 200, JSON.stringify(found.body))
+    assert.equal(found.body.data.user.id, user.id)
+    assert.ok(!JSON.stringify(found.body).includes('password_hash'))
+
+    const missing = await request(app)
+      .get('/api/admin/users/00000000-0000-4000-8000-000000000000')
+      .set(asAuth(adminToken))
+    assert.equal(missing.status, 404, JSON.stringify(missing.body))
+  })
+
+  it('rejects a malformed identifier instead of crashing', async () => {
+    const res = await request(app)
+      .get('/api/admin/users/not-a-uuid')
+      .set(asAuth(adminToken))
+    assert.equal(res.status, 422, JSON.stringify(res.body))
+  })
+
+  it('rejects an unsupported query parameter', async () => {
+    const res = await request(app)
+      .get('/api/admin/users?role=WIZARD')
+      .set(asAuth(adminToken))
+    assert.equal(res.status, 422, JSON.stringify(res.body))
+  })
+})
+
+describe('phase 1: database guarantees', () => {
+  /**
+   * Asserts that a statement is rejected with a specific SQLSTATE.
+   *
+   * The suite runs against a single-session PGlite socket server, and two
+   * deliberate constraint violations in a row can leave the transport reporting
+   * ECONNRESET for the following statement. That is an artefact of the test
+   * double rather than database behaviour, so a transport failure is retried
+   * once and only the SQLSTATE is treated as the result under test.
+   */
+  async function expectPgError(run, sqlstate, message) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await run()
+      } catch (error) {
+        if (error.code === 'ECONNRESET' && attempt === 0) continue
+        assert.equal(error.code, sqlstate, message)
+        return
+      }
+      assert.fail(`${message}: the statement was accepted`)
+    }
+  }
+
+  it('enforces unique emails regardless of case', async () => {
+    const user = await createUser({ email: `unique.${uniq()}@example.edu` })
+    const passwordHash = await hashPassword('Str0ngPass!23')
+    await expectPgError(
+      () => query(
+        `INSERT INTO users (email, password_hash, first_name, last_name)
+         VALUES ($1,$2,'Dup','Licate')`,
+        [user.email.toUpperCase(), passwordHash],
+      ),
+      '23505',
+      'a case-insensitive duplicate email must be rejected',
+    )
+  })
+
+  it('enforces the foreign key from roles back to users', async () => {
+    await expectPgError(
+      () => query(
+        `INSERT INTO user_roles (user_id, role_id)
+         VALUES ('00000000-0000-4000-8000-000000000000',
+                 (SELECT id FROM roles WHERE name = 'ALUMNI'))`,
+      ),
+      '23503',
+      'assigning a role to a missing user must be rejected',
+    )
+  })
+
+  it('cascades token deletion when the account is removed', async () => {
+    const user = await createUser({ email: `cascade.${uniq()}@example.edu` })
+    await loginAs(user)
+    const { rows } = await query(
+      'SELECT COUNT(*)::int AS total FROM refresh_tokens WHERE user_id = $1', [user.id],
+    )
+    assert.ok(rows[0].total > 0)
+
+    await query('DELETE FROM users WHERE id = $1', [user.id])
+    const { rows: after } = await query(
+      'SELECT COUNT(*)::int AS total FROM refresh_tokens WHERE user_id = $1', [user.id],
+    )
+    assert.equal(after[0].total, 0)
+  })
+
+  it('keeps the indexes the authentication queries rely on', async () => {
+    const { rows } = await query(
+      `SELECT indexname FROM pg_indexes
+       WHERE tablename = 'users' AND indexname = ANY($1)`,
+      [['idx_users_email_lower', 'idx_users_account_status', 'idx_users_active']],
+    )
+    const names = rows.map((r) => r.indexname)
+    assert.ok(names.includes('idx_users_email_lower'), 'email lookup index')
+    assert.ok(names.includes('idx_users_account_status'), 'account_status index')
+    assert.ok(names.includes('idx_users_active'), 'lifecycle filter index')
+  })
+
+  it('gives every token table a unique hash constraint', async () => {
+    for (const table of ['refresh_tokens', 'password_reset_tokens', 'email_verification_tokens']) {
+      const { rows } = await query(
+        `SELECT COUNT(*)::int AS total FROM pg_constraint
+         WHERE conrelid = $1::regclass AND contype = 'u'`,
+        [table],
+      )
+      assert.ok(rows[0].total > 0, `${table} should carry a unique constraint`)
+    }
+  })
+
+  it('created every table the authentication phase depends on', async () => {
+    const expected = [
+      'users', 'roles', 'user_roles', 'refresh_tokens',
+      'password_reset_tokens', 'email_verification_tokens', 'email_queue',
+    ]
+    const { rows } = await query(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = ANY($1)`,
+      [expected],
+    )
+    const found = rows.map((r) => r.table_name)
+    for (const table of expected) {
+      assert.ok(found.includes(table), `${table} should exist`)
+    }
+  })
+
+  it('exposes exactly the four specified account states', async () => {
+    const { rows } = await query(
+      `SELECT e.enumlabel FROM pg_enum e
+       JOIN pg_type t ON t.oid = e.enumtypid
+       WHERE t.typname = 'account_status' ORDER BY e.enumsortorder`,
+    )
+    assert.deepEqual(
+      rows.map((r) => r.enumlabel),
+      ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'],
+    )
+  })
+
+  it('keeps each reversible migration paired with a rollback companion', async () => {
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const dir = path.resolve('..', 'database', 'migrations')
+    const files = await fs.readdir(dir)
+
+    const downs = files.filter((f) => f.endsWith('.down.sql'))
+    for (const down of downs) {
+      const up = down.replace('.down.sql', '.sql')
+      assert.ok(files.includes(up), `${down} has no matching ${up}`)
+    }
+    assert.ok(files.includes('008_user_account_status.sql'))
+    assert.ok(downs.includes('008_user_account_status.down.sql'))
   })
 })

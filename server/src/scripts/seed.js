@@ -4,11 +4,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pool, closePool } from '../config/database.js'
 import logger from '../utils/logger.js'
+import { seedDevUsers } from './seed-dev-users.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const seedDir = path.resolve(here, '..', '..', '..', 'database', 'seeds')
 
-async function run() {
+async function run({ withUsers = true } = {}) {
   const files = (await fs.readdir(seedDir))
     .filter((f) => f.endsWith('.sql'))
     .sort()
@@ -38,6 +39,9 @@ async function run() {
   }
 
   logger.info('seed complete', { count: files.length })
+
+  // Roles must already exist before the development accounts can reference them.
+  if (withUsers) await seedDevUsers()
 }
 
 run()

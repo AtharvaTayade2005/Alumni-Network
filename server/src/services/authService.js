@@ -21,6 +21,18 @@ function cookieOptions() {
   }
 }
 
+/**
+ * Mirrors the sync_user_account_status trigger. Used only as a fallback for
+ * queries that do not select the account_status column; the database remains the
+ * authority and this keeps the two definitions visibly in step.
+ */
+function accountStatusFor(user) {
+  if (user.is_suspended) return 'SUSPENDED'
+  if (!user.is_active) return 'INACTIVE'
+  if (!user.is_email_verified) return 'PENDING_VERIFICATION'
+  return 'ACTIVE'
+}
+
 function publicUser(user) {
   if (!user) return null
   return {
@@ -32,10 +44,14 @@ function publicUser(user) {
     avatarUrl: user.avatar_url,
     phone: user.phone,
     roles: user.roles ?? [],
-    isEmailVerified: user.is_email_verified,
+isEmailVerified: user.is_email_verified,
     isActive: user.is_active,
     isSuspended: user.is_suspended,
-    lastLoginAt: user.last_login_at,
+      // Lifecycle state maintained by the 008 migration. The booleans above
+      // remain the stored detail that older modules read; this is the single
+      // value callers should branch on.
+      accountStatus: user.account_status ?? accountStatusFor(user),
+      lastLoginAt: user.last_login_at,
     createdAt: user.created_at,
   }
 }
