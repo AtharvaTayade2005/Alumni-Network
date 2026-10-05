@@ -81,7 +81,12 @@ function studentWithSpecAliases(row) {
   else if (row.expected_graduation !== undefined) out.graduationYear = row.expected_graduation
   alias(out, row.year_of_study, 'yearOfStudy')
   alias(out, row.career_interests, 'careerInterests')
-  alias(out, row.is_open_to_mentorship, 'mentorshipAvailable')
+  // Named for what the column actually means. A student's
+  // `is_open_to_mentorship` records willingness to *be* mentored; exposing it as
+  // `mentorshipAvailable`, the same alias alumni use for "I will mentor", invited
+  // clients to read a student as a prospective mentor. `openToMentorship` keeps the
+  // two visibly distinct.
+  alias(out, row.is_open_to_mentorship, 'openToMentorship')
   for (const key of ['university', 'location', 'profile_photo']) {
     alias(out, row[key], key === 'profile_photo' ? 'profilePhoto' : key)
   }

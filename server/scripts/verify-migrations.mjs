@@ -205,6 +205,122 @@ async function main() {
     && left.rows[0].ap === 0 && left.rows[0].ev === 0,
     JSON.stringify(left.rows[0]))
 
+  console.log('\n--- phase 3: mentorship and networking schema ---')
+  const requestCheck = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'mentorship_requests'::regclass
+       AND conname = 'mentorship_requests_status_check'`)
+  check('mentorship_requests accepts completed',
+    requestCheck.rows[0]?.def.includes('completed'), requestCheck.rows[0]?.def)
+
+  const notificationCheck = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'notifications'::regclass
+       AND conname = 'notifications_type_check'`)
+  check('notifications accepts mentorship_completed',
+    notificationCheck.rows[0]?.def.includes('mentorship_completed'),
+    notificationCheck.rows[0]?.def)
+  check('notifications keeps the declined and ended types it already stored',
+    notificationCheck.rows[0]?.def.includes('mentorship_declined')
+    && notificationCheck.rows[0]?.def.includes('mentorship_ended'))
+
+  // 001 attaches set_updated_at() to notifications without ever adding the column,
+  // so the actor_id ON DELETE SET NULL that a connection notification causes would
+  // fail on any UPDATE of a notification row.
+  const notifications = await cols('notifications')
+  check('notifications.updated_at present', notifications.has('updated_at'))
+  await db.exec(`INSERT INTO users (id,email,password_hash,first_name,last_name)
+    VALUES ('44444444-4444-4444-4444-444444444444','x4@example.edu','x','X','Four')`)
+  await db.exec(`INSERT INTO users (id,email,password_hash,first_name,last_name)
+    VALUES ('55555555-5555-5555-5555-555555555555','x5@example.edu','x','X','Five')`)
+  await db.exec(`INSERT INTO notifications (user_id, actor_id, type, title)
+    VALUES ('55555555-5555-5555-5555-555555555555',
+            '44444444-4444-4444-4444-444444444444', 'connection_request', 'Hi')`)
+  await db.exec(`UPDATE notifications SET is_read = TRUE
+    WHERE user_id = '55555555-5555-5555-5555-555555555555'`)
+  check('a notification row can be marked read', true)
+  await db.exec(`DELETE FROM users WHERE id = '44444444-4444-4444-4444-444444444444'`)
+  const actorCleared = await db.query(
+    `SELECT actor_id FROM notifications WHERE user_id = '55555555-5555-5555-5555-555555555555'`)
+  check('deleting the actor clears notification.actor_id',
+    actorCleared.rows[0]?.actor_id === null, String(actorCleared.rows[0]?.actor_id))
+
+  const mentorTrigger = await db.query(
+    `SELECT tgname FROM pg_trigger
+     WHERE tgrelid = 'alumni_profiles'::regclass AND NOT tgisinternal
+       AND tgname = 'alumni_mentor_listing_requires_verification'`)
+  check('mentor listing is guarded by the AFTER trigger', mentorTrigger.rows.length === 1)
+  const legacyCheck = await db.query(
+    `SELECT conname FROM pg_constraint
+     WHERE conrelid = 'alumni_profiles'::regclass
+       AND conname = 'alumni_open_to_mentor_needs_verified'`)
+  check('the check-constraint form is gone', legacyCheck.rows.length === 0)
+
+  // The profile service upserts with INSERT ... ON CONFLICT, which proposes a
+  // candidate tuple whose verification_status is still the column default. The
+  // AFTER trigger only sees rows that are really written, so the update branch must
+  // be free to advertise on a profile that is already verified.
+  await db.exec(`INSERT INTO alumni_profiles (user_id, verification_status)
+    VALUES ('33333333-3333-3333-3333-333333333333', 'verified')`)
+  await db.exec(`INSERT INTO alumni_profiles (user_id, verification_status, is_open_to_mentor)
+    VALUES ('33333333-3333-3333-3333-333333333333', 'pending', TRUE)
+    ON CONFLICT (user_id) DO UPDATE SET is_open_to_mentor = TRUE`)
+  const listed = await db.query(
+    `SELECT is_open_to_mentor, verification_status FROM alumni_profiles
+     WHERE user_id = '33333333-3333-3333-3333-333333333333'`)
+  check('a verified alumnus may advertise through the upsert the profile service uses',
+    listed.rows[0]?.is_open_to_mentor === true
+    && listed.rows[0]?.verification_status === 'verified',
+    JSON.stringify(listed.rows[0]))
+
+  await rejects('unverified alumnus may not advertise as a mentor', `
+    UPDATE alumni_profiles SET verification_status = 'pending', is_open_to_mentor = TRUE
+    WHERE user_id = '33333333-3333-3333-3333-333333333333'`)
+  // The cascade section above already deleted its fixtures, so the networking rows
+  // get their own users.
+  await db.exec(`INSERT INTO users (id,email,password_hash,first_name,last_name)
+    VALUES ('66666666-6666-6666-6666-666666666666','x6@example.edu','x','X','Six'),
+           ('77777777-7777-7777-7777-777777777777','x7@example.edu','x','X','Seven')`)
+  const mentorId = '66666666-6666-6666-6666-666666666666'
+  const menteeId = '77777777-7777-7777-7777-777777777777'
+  await rejects('mentorship request rejects an unknown state', `
+    INSERT INTO mentorship_requests (mentor_id, mentee_id, career_goal, area_of_interest, status)
+    VALUES ('${mentorId}', '${menteeId}', 'goal', 'area', 'maybe')`)
+  await db.exec(`INSERT INTO mentorship_requests
+      (mentor_id, mentee_id, career_goal, area_of_interest, status)
+    VALUES ('${mentorId}', '${menteeId}', 'goal', 'area', 'completed')`)
+  check('mentorship request accepts completed', true)
+  await rejects('connection rejects an unknown state', `
+    INSERT INTO connections (requester_id, addressee_id, status)
+    VALUES ('${mentorId}', '${menteeId}', 'maybe')`)
+  await rejects('connection rejects a request to yourself', `
+    INSERT INTO connections (requester_id, addressee_id, status)
+    VALUES ('${mentorId}', '${mentorId}', 'pending')`)
+  await db.exec(`INSERT INTO connections (requester_id, addressee_id, status)
+    VALUES ('${mentorId}', '${menteeId}', 'pending')`)
+  await rejects('the symmetric pair index refuses the reversed pair', `
+    INSERT INTO connections (requester_id, addressee_id, status)
+    VALUES ('${menteeId}', '${mentorId}', 'pending')`)
+
+  console.log('\n--- phase 3 indexes exist and suit their queries ---')
+  const idx3 = await db.query(
+    `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public'`)
+  const present3 = new Set(idx3.rows.map((r) => r.indexname))
+  const phase3Indexes = [
+    'idx_notifications_user_type', 'idx_mentorship_req_mentee_created',
+    'idx_mentorship_req_mentor_status_created', 'idx_connections_blocked_pair',
+    'idx_mentorship_rel_active_mentor', 'idx_mentorship_rel_active_mentee',
+  ]
+  const missing3 = phase3Indexes.filter((n) => !present3.has(n))
+  check(`all ${phase3Indexes.length} phase 3 indexes present`, missing3.length === 0,
+    missing3.length ? `missing: ${missing3.join(', ')}` : 'none missing')
+
+  const mentorIndex = idx3.rows.find((r) => r.indexname === 'idx_alumni_mentor')
+  check('idx_alumni_mentor keys on verification_status under the listing predicate',
+    /verification_status/.test(mentorIndex?.indexdef ?? '')
+    && /is_open_to_mentor = true/.test(mentorIndex?.indexdef ?? ''),
+    mentorIndex?.indexdef)
+
   console.log('\n--- rollback then forward again ---')
   const down = await files('.down.sql', { downs: true })
   check('every phase 2 migration has a rollback companion', down.length >= 1, `${down.length} file(s)`)

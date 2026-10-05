@@ -73,6 +73,28 @@ Fields left out are unchanged. Passing `null` explicitly clears a nullable field
 composed automatically from `city`/`region`/`country` when you supply those
 instead; passing an explicit `location` always wins.
 
+### `mentorshipAvailable` versus `openToMentorship`
+
+These are not aliases of each other, and the difference is enforced rather than
+documented:
+
+| Field | Profile | Means |
+| --- | --- | --- |
+| `mentorshipAvailable` | Alumni | "I will mentor" |
+| `openToMentorship` | Student | "I would like to be mentored" |
+
+`mentorshipAvailable` maps to `alumni_profiles.is_open_to_mentor`, which the
+database refuses to set on an unverified profile (see
+[database.md](../backend/database.md#the-mentor-listing-trigger)). A student
+profile's `is_open_to_mentorship` is a different column with the opposite
+meaning, so it is exposed as `openToMentorship` and `mentorshipAvailable` is
+rejected on `PUT /api/students/me` as a `422`. Exposing the student flag under
+the alumni's name would have let a client read a student as a prospective
+mentor.
+
+Students are never mentors, whatever their own profile says: mentor discovery
+joins `alumni_profiles` and requires a verified, opted-in alumnus.
+
 ## Sub-resources
 
 | Method | Path | Notes |

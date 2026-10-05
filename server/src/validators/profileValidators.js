@@ -264,6 +264,10 @@ export const putStudentProfileSchema = z.object({
   careerInterests: optionalText(1500),
   profilePhoto: httpUrlSchema.optional().nullable(),
   yearOfStudy: z.coerce.number().int().min(1).max(10).optional().nullable(),
+  // A student may say whether they want to be mentored. `mentorshipAvailable` is
+  // not accepted here: that name means "I will mentor" on an alumni profile, and
+  // only a verified alumnus may set it.
+  openToMentorship: z.boolean().optional(),
   privacy: privacySettingsSchema.optional(),
   skills: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
 }).refine(

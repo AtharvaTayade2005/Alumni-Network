@@ -22,7 +22,14 @@ export function validate({ body, query, params }) {
         // controllers read getQuery(req).
         req.validatedQuery = query.parse(req.query)
       }
-      if (body) req.body = body.parse(req.body)
+      if (body) {
+        // Express 5 leaves req.body undefined when a request carries no body at
+        // all, which would make every object schema report the opaque
+        // "_root Required" instead of naming the fields that are missing. An
+        // absent body is therefore validated as an empty object: a route that
+        // needs fields still fails, but it says which ones.
+        req.body = body.parse(req.body ?? {})
+      }
       next()
     } catch (error) {
       if (error instanceof ZodError) {

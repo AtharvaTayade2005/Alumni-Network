@@ -30,7 +30,10 @@ no companion, so it never leaves the schema half-rolled-back. Use
 `-- --steps=N` to roll back more than one.
 
 Migrations 001–007 predate the convention and are forward-only; rebuild those
-with `npm run db:reset`. New migrations should ship a companion.
+with `npm run db:reset`. New migrations should ship a companion. Migration 011 has
+one: rolling it back folds `completed` requests and notifications into their
+pre-011 forms rather than refusing to run, so the rollback succeeds on data that
+has already used the new values.
 
 `database/migrations/README.md` documents the file-naming rules.
 
@@ -66,10 +69,23 @@ npm run perf:directory      # seed 50k alumni and time the directory queries
 ```
 
 `verify:migrations` applies the whole chain to a throwaway database, then checks
-the columns, triggers, constraints and indexes Phase 2 relies on; confirms that
-constraints actually reject bad data; confirms cascade deletes; and finally rolls
-every reversible migration back and applies them forward again. It is the
-executable version of this document — if the two disagree, the script is right.
+the columns, triggers, constraints and indexes Phases 2 and 3 rely on; confirms
+that constraints actually reject bad data; confirms cascade deletes and the
+notification `updated_at` behaviour; and finally rolls every reversible migration
+back and applies them forward again. It is the executable version of this
+document — if the two disagree, the script is right.
+
+Phase 3 checks worth knowing about, because they assert behaviour rather than
+mere existence:
+
+- `notifications.updated_at` is exercised by marking a notification read *and* by
+  deleting the member who acted in it, which is what `actor_id`'s `ON DELETE SET
+  NULL` performs.
+- The mentor-listing trigger is proven both ways: a verified alumnus may
+  advertise through the very upsert the profile service uses, and an unverified
+  one is refused.
+- The symmetric pair index is proven by inserting a connection and then trying the
+  reversed pair.
 
 ## Phase 1 tables
 
@@ -229,6 +245,116 @@ directory queries join it: directory visibility, location, employer and
 mentorship flags are all applied in SQL, and the per-dimension facet rules in
 [privacy](privacy.md) depend on them. Index `idx_privacy_directory_visible`
 covers the visibility check.
+
+## Phase 3 tables
+
+Connections, mentorship and notifications were all created by 001 and widened by
+003, 005 and 007, so `011_networking_mentorship.sql` only closes the gaps the
+networking and mentorship rules exposed. Nothing is renamed or dropped, and every
+existing row keeps its value.
+
+### connections
+
+One row per pair, held unique by `connections_pair_symmetric_unique` on
+`(LEAST(requester_id, addressee_id), GREATEST(requester_id, addressee_id))`. The
+canonical ordering is what makes the index symmetric: whichever member happens to
+be stored first, the index expression is the same, so the reverse pair collides
+rather than creating a second row.
+
+`status` is `pending`, `accepted`, `rejected` or `blocked`, all lowercase, and
+there is no separate blocks table. **For a blocked row, `requester_id` is the
+blocker and `addressee_id` is the blocked member.** Blocking rewrites both
+columns rather than only flipping the status, which is what makes "did I block
+them?" answerable — and, more importantly, what makes "can I clear this block?"
+answerable *only* to the blocker. A blocked member's `unblock` attempt matches no
+row and returns `404` instead of succeeding.
+
+### mentorship_requests, mentorship_relationships
+
+`mentorship_requests` holds one row per `(mentor_id, mentee_id)` pair, so
+re-requesting after a rejection or a cancellation revives the existing row
+(`ON CONFLICT … DO UPDATE … WHERE status IN ('rejected','cancelled')`) rather than
+inserting a second one.
+
+| Constraint | Rule |
+| --- | --- |
+| `mentorship_requests_status_check` | `pending`, `accepted`, `rejected`, `cancelled`, `completed` |
+| `mentorship_relationships_status_check` | `active`, `completed`, `ended` |
+
+`completed` was added to the request constraint by 011. Without it a finished
+mentorship left its request at `accepted` forever, so the request list could not
+tell "still going" from "finished". Completing a relationship therefore updates
+the relationship **and** its originating request in the same transaction.
+
+Ending early deliberately leaves the request at `accepted`: the pairing did
+happen, it stopped, and the `ended` relationship status is what records that.
+
+Capacity is `mentorship_capacity` minus the count of `active` relationships for
+that mentor, and it is re-checked under `SELECT … FOR UPDATE` when a request is
+accepted — the count taken when the request arrived may be stale by the time the
+mentor answers.
+
+### notifications
+
+`notifications_type_check` gains `mentorship_completed` from 011. The constraint
+already permitted `mentorship_declined`, which is deliberately **not** renamed to
+`mentorship_rejected`: it is already stored in existing rows and already mapped by
+the client's notification badge styles.
+
+011 also adds `notifications.updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`.
+Migration 001 attaches `trg_notifications_updated_at` to `notifications`, and
+`set_updated_at()` assigns `NEW.updated_at` — but the column was never created,
+so any `UPDATE` of a notification row failed with
+`record "new" has no field "updated_at"`. Two ordinary operations hit it: marking
+one notification read, and the `ON DELETE SET NULL` that `actor_id`'s foreign key
+performs when a member who acted in a notification is deleted, which every
+connection and mentorship notification records. Dropping the trigger instead
+would have left the table as the only one where a mutation leaves no timestamp.
+
+### The mentor-listing trigger
+
+Mentorship eligibility is enforced by
+`alumni_mentor_listing_requires_verification`, an `AFTER INSERT OR UPDATE OF
+is_open_to_mentor, verification_status` trigger that raises `23514` when
+`is_open_to_mentor` is set while `verification_status <> 'verified'`.
+
+An `AFTER` trigger rather than a `CHECK` constraint, and the reason is specific.
+The profile service writes alumni profiles with
+`INSERT … ON CONFLICT (user_id) DO UPDATE`, and PostgreSQL validates `CHECK`
+constraints against the *candidate* tuple before it resolves the conflict. That
+candidate row carries `verification_status` at its column default (`pending`)
+while `is_open_to_mentor` comes from the caller, so a verified alumnus editing
+their own profile would trip the check on a row the `UPDATE` branch never made
+unverified. `CHECK` constraints cannot be `DEFERRABLE`, so the test cannot be
+deferred to the final state of the row.
+
+A `BEFORE` trigger has the same fault, because it also fires on the candidate
+tuple. `AFTER INSERT` fires only for a row that is really inserted and
+`AFTER UPDATE` only for a row that is really updated, so on
+`ON CONFLICT DO UPDATE` only the update path is checked, against the values that
+persist.
+
+Revoking verification also clears `is_open_to_mentor` in the same transaction, so
+a rejected alumnus stops appearing in the directory without needing the trigger
+to fire.
+
+### Phase 3 indexes
+
+| Index | Supports |
+| --- | --- |
+| `idx_alumni_mentor` | Mentor discovery; re-keyed to `(verification_status, graduation_year DESC)` partial on `is_open_to_mentor` |
+| `idx_connections_blocked_pair` | The `(requester_id, addressee_id)` lookup behind unblocking (partial: `blocked`) |
+| `idx_mentorship_req_mentor_status_created` | The mentor inbox: one mentor, filtered by status, newest first |
+| `idx_mentorship_req_mentee_created` | The mentee's own list, newest first |
+| `idx_mentorship_rel_active_mentor` | Capacity counting and the mentor's active list (partial: `active`) |
+| `idx_mentorship_rel_active_mentee` | The mentee's active list (partial: `active`) |
+| `idx_notifications_user_type` | The feed read per user and filtered by type |
+
+`idx_alumni_mentor` kept its name and its partial predicate but changed its key.
+As created by 001 it keyed on `is_open_to_mentor` alone, so every advertising
+alumnus still had to be filtered by `verification_status` one row at a time,
+which is exactly what the mentor query does. `graduation_year DESC` is that
+query's ordering column.
 
 ## Indexes
 

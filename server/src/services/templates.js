@@ -62,6 +62,37 @@ const TEMPLATES = {
     })
     return { html, text: stripTags(html) }
   },
+  connection_accepted: ({ withName }) => {
+    const html = layout({
+      title: 'Connection accepted',
+      body: `<p>${withName} accepted your connection request. You can now message each other.</p>`,
+    })
+    return { html, text: stripTags(html) }
+  },
+  // `peerName` rather than `mentorName`: either participant may be the reader of
+  // this mail, so naming the other side "the mentor" would be wrong for a mentor
+  // reading about their own mentorship.
+  mentorship_completed: ({ peerName }) => {
+    const html = layout({
+      title: 'Mentorship completed',
+      body: `<p>Your mentorship with ${peerName} has been marked complete. Thank you both for taking part.</p>`,
+    })
+    return { html, text: stripTags(html) }
+  },
+  mentorship_declined: ({ mentorName, note }) => {
+    const html = layout({
+      title: 'Mentorship request declined',
+      body: `<p>${mentorName} is not able to take on a mentorship right now.</p>${note ? `<p>“${note}”</p>` : ''}`,
+    })
+    return { html, text: stripTags(html) }
+  },
+  mentorship_ended: ({ peerName, reason }) => {
+    const html = layout({
+      title: 'Mentorship ended',
+      body: `<p>The mentorship with ${peerName} has been closed.</p>${reason ? `<p>Reason: ${reason}</p>` : ''}`,
+    })
+    return { html, text: stripTags(html) }
+  },
   event_rsvp: ({ eventTitle, eventDate, venue }) => {
     const html = layout({
       title: 'RSVP confirmed',

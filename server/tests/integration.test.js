@@ -491,7 +491,7 @@ describe('connections', () => {
       .set(asAuth(aliceToken))
       .send({ userId: bob.id, message: 'Hello there' })
     assert.equal(request1.status, 201, JSON.stringify(request1.body))
-    assert.equal(request1.body.data.status, 'pending')
+    assert.equal(request1.body.data.status, 'PENDING')
     assert.equal(request1.body.data.direction, 'outgoing')
 
     const pending = await request(app)
@@ -505,7 +505,7 @@ describe('connections', () => {
       .set(asAuth(bobToken))
       .send({ action: 'accept' })
     assert.equal(accepted.status, 200, JSON.stringify(accepted.body))
-    assert.equal(accepted.body.data.status, 'accepted')
+    assert.equal(accepted.body.data.status, 'ACCEPTED')
 
     const status = await request(app)
       .get(`/api/connections/status/${bob.id}`)
@@ -743,7 +743,7 @@ describe('mentorship', () => {
         preferredMode: 'video',
       })
     assert.equal(created.status, 201, JSON.stringify(created.body))
-    assert.equal(created.body.data.status, 'pending')
+    assert.equal(created.body.data.status, 'PENDING')
     assert.equal(created.body.data.direction, 'outgoing')
     assert.equal(created.body.data.role, 'mentee')
     assert.equal(created.body.data.peer.id, mentor.id)
@@ -773,8 +773,8 @@ describe('mentorship', () => {
       .set(asAuth(mentorToken))
       .send({ status: 'accepted', responseNote: 'Happy to help.' })
     assert.equal(accepted.status, 200, JSON.stringify(accepted.body))
-    assert.equal(accepted.body.data.request.status, 'accepted')
-    assert.equal(accepted.body.data.relationship.status, 'active')
+    assert.equal(accepted.body.data.request.status, 'ACCEPTED')
+    assert.equal(accepted.body.data.relationship.status, 'ACTIVE')
     assert.equal(accepted.body.data.relationship.role, 'mentor')
     assert.equal(accepted.body.data.relationship.peer.id, mentee.id)
   })
@@ -807,7 +807,7 @@ describe('mentorship', () => {
         .set(asAuth(token))
       assert.equal(res.status, 200, JSON.stringify(res.body))
       assert.equal(res.body.data.length, 1, JSON.stringify(res.body))
-      assert.equal(res.body.data[0].status, 'active')
+      assert.equal(res.body.data[0].status, 'ACTIVE')
     }
   })
 
@@ -837,7 +837,7 @@ describe('mentorship', () => {
       .set(asAuth(menteeToken))
       .send({ endReason: 'Goal reached' })
     assert.equal(res.status, 200, JSON.stringify(res.body))
-    assert.equal(res.body.data.status, 'ended')
+    assert.equal(res.body.data.status, 'ENDED')
     assert.equal(res.body.data.endReason, 'Goal reached')
 
     const again = await request(app)
@@ -874,7 +874,7 @@ describe('mentorship', () => {
       .set(asAuth(newMentorToken))
       .send({ status: 'rejected', responseNote: 'Full right now.' })
     assert.equal(declined.status, 200, JSON.stringify(declined.body))
-    assert.equal(declined.body.data.request.status, 'rejected')
+    assert.equal(declined.body.data.request.status, 'REJECTED')
     assert.equal(declined.body.data.relationship, null)
 
     // The pair row is reused rather than duplicating the pair.
@@ -883,7 +883,7 @@ describe('mentorship', () => {
       .set(asAuth(menteeToken))
       .send({ mentorId: newMentor.id, careerGoal, areaOfInterest: 'Product' })
     assert.equal(second.status, 201, JSON.stringify(second.body))
-    assert.equal(second.body.data.status, 'pending')
+    assert.equal(second.body.data.status, 'PENDING')
     assert.equal(second.body.data.id, first.body.data.id, 'the same pair row is revived')
   })
 

@@ -51,22 +51,27 @@ async function createMember({
       [id],
     )
   } else {
+    // is_open_to_mentor defaults to whether the member is verified, because the
+    // alumni_mentor_listing_requires_verification trigger (migration 011) rejects
+    // an unverified alumnus who advertises as a mentor. Tests that specifically
+    // need an unverified mentor pass overrides, which still go through the
+    // trigger.
     const cols = {
       graduation_year: 2018, degree: 'BSc', department: 'Computing',
       current_company: 'Acme', current_position: 'Engineer',
       industry: 'Software', city: 'Karachi', country: 'Pakistan',
-      verification_status: status, is_open_to_mentor: true,
+      verification_status: status,
       ...overrides,
     }
+    const isOpenToMentor = overrides.is_open_to_mentor ?? (status === 'verified')
+    cols.is_open_to_mentor = isOpenToMentor
+
     const keys = Object.keys(cols)
-    const { rows: p } = await query(
+    await query(
       `INSERT INTO alumni_profiles (user_id, ${keys.join(',')})
-       VALUES ($1, ${keys.map((_, i) => `$${i + 2}`).join(',')})
-       RETURNING id`,
+       VALUES ($1, ${keys.map((_, i) => `$${i + 2}`).join(',')})`,
       [id, ...keys.map((k) => cols[k])],
     )
-    await query(`UPDATE alumni_profiles SET is_open_to_mentor = $2 WHERE id = $1`,
-      [p[0].id, cols.is_open_to_mentor])
   }
 
   const privacyKeys = Object.keys(privacy)

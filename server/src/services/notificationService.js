@@ -2,12 +2,21 @@ import { query } from '../config/database.js'
 import * as mailService from './mailService.js'
 import { emitToUsers } from '../sockets/index.js'
 
+/**
+ * Maps a stored notification type to the email template that describes it.
+ *
+ * A type absent from this map still creates its in-app notification but sends no
+ * email, which is how the future modules are expected to arrive: add the type to
+ * the constraint and to this map, and nothing else needs to change.
+ */
 const EMAIL_TEMPLATES = {
   mentorship_request: 'mentorship_request',
   mentorship_accepted: 'mentorship_accepted',
-  mentorship_declined: 'mentorship_accepted',
-  mentorship_ended: 'mentorship_accepted',
+  mentorship_declined: 'mentorship_declined',
+  mentorship_ended: 'mentorship_ended',
+  mentorship_completed: 'mentorship_completed',
   connection_request: 'connection_request',
+  connection_accepted: 'connection_accepted',
   event_rsvp: 'event_rsvp',
   event_reminder: 'event_reminder',
   event_cancelled: 'event_cancelled',
@@ -22,36 +31,71 @@ const EMAIL_TEMPLATES = {
   admin_notice: 'email_verification',
 }
 
+/**
+ * Creates a notification.
+ *
+ * `db` is the pg client of a caller's transaction. Passing it writes the
+ * notification inside that transaction, so a connection or mentorship state
+ * change and the notification describing it cannot disagree: either both land or
+ * neither does. Omit it to write on the shared pool, which is only safe when
+ * nothing else has to change.
+ *
+ * The websocket push is deliberately left until after the caller commits. A
+ * socket emit is not transactional, so emitting from inside a transaction would
+ * tell a client about a row that a later rollback erases.
+ *
+ * Preference handling is unchanged: a user with no preferences row defaults to
+ * in-app on and email off, and muted types suppress both the row and the email.
+ */
 export async function notify({
-  userId, type, title, body = null, link = null, actorId = null, email = null,
+  userId, type, title, body = null, link = null, actorId = null,
+  email = null, emailPayload = null, db = null,
 }) {
   if (!userId) return null
 
-  const { rows: prefRows } = await query(
+  const runner = db ?? { query }
+
+  const { rows: prefRows } = await runner.query(
     'SELECT * FROM notification_preferences WHERE user_id = $1', [userId],
   )
   const pref = prefRows[0]
 
-  if (!pref || pref.in_app_enabled) {
-    if (!pref?.muted_types?.includes(type)) {
-      const { rows } = await query(
-        `INSERT INTO notifications (user_id, type, title, body, link, actor_id)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [userId, type, title, body, link, actorId],
-      )
-      await emitToUsers([userId], 'notification', formatNotification(rows[0]))
-    }
+  const deliverInApp = (!pref || pref.in_app_enabled)
+    && !pref?.muted_types?.includes(type)
+
+  let stored = null
+  if (deliverInApp) {
+    const { rows } = await runner.query(
+      `INSERT INTO notifications (user_id, type, title, body, link, actor_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [userId, type, title, body, link, actorId],
+    )
+    stored = rows[0]
   }
 
   if (email && pref?.email_enabled && !pref?.muted_types?.includes(type)) {
     const template = EMAIL_TEMPLATES[type]
     if (template) {
-      await mailService.queueEmail(email, title, template, { ...email, name: email })
+      // Each template destructures its own fields, so the caller supplies them
+      // via emailPayload rather than the raw notification body.
+      await mailService.queueEmail(email, title, template, {
+        ...(emailPayload ?? { name: email }),
+      }, db)
     }
   }
 
-  return true
+  // A transactional write is not visible to other sessions until commit, so the
+  // push is the caller's responsibility once it has committed.
+  if (stored && !db) await emitToUsers([userId], 'notification', formatNotification(stored))
+
+  return stored ? formatNotification(stored) : null
 }
+
+/** Emits an already-committed notification to its recipient's sockets. */
+export async function emitStored(userId, notification) {
+  if (userId && notification) await emitToUsers([userId], 'notification', notification)
+}
+
 
 export function formatNotification(row) {
   return {

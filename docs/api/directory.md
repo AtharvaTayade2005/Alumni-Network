@@ -29,7 +29,7 @@ the directory itself.
 | `employer` | string | Substring of current company |
 | `industry` | string | Case-insensitive exact match |
 | `skills` | string | Comma-separated; matches members holding **any** |
-| `openToMentor` | boolean | |
+| `openToMentor` | boolean | Matches `is_open_to_mentor` |
 | `verifiedOnly` | boolean | Default `false` |
 | `hasLocation` | boolean | Only members with coordinates |
 | `page` | integer ≥1 | Default `1` |
@@ -40,6 +40,12 @@ the directory itself.
 All parameters are validated before any SQL is built. `sort` is an allow-list
 rather than a column name, so it cannot be used to inject SQL through `ORDER BY`.
 Out-of-range `page`/`limit` and unknown `sort` values are `422`.
+
+`openToMentor` implies `verified`. Since migration 011 the database refuses to
+store `is_open_to_mentor` on an unverified profile at all, so the column cannot
+report a mentor who is not verified — but the filter is written as two
+predicates rather than relying on that invariant, because the two are separate
+questions and `verifiedOnly: false` must not widen the result.
 
 ## Response
 
@@ -165,17 +171,17 @@ Measured with `npm run perf:directory`, which seeds 50,000 alumni, runs
 
 | Query | Time |
 | --- | --- |
-| Unfiltered page 1 | ~192ms |
-| Deep page (offset 45000) | ~256ms |
-| Keyword search | ~462ms |
-| Substring search (ILIKE fallback) | ~452ms |
-| Graduation year range | ~27ms |
-| Major filter | ~35ms |
-| Location filter | ~66ms |
-| Employer filter | ~32ms |
-| Industry + openToMentor | ~38ms |
-| Verified only | ~46ms |
-| Sorted by graduation year | ~172ms |
+| Unfiltered page 1 | ~197ms |
+| Deep page (offset 45000) | ~266ms |
+| Keyword search | ~486ms |
+| Substring search (ILIKE fallback) | ~463ms |
+| Graduation year range | ~28ms |
+| Major filter | ~36ms |
+| Location filter | ~68ms |
+| Employer filter | ~35ms |
+| Industry + openToMentor | ~22ms |
+| Verified only | ~49ms |
+| Sorted by graduation year | ~188ms |
 
 Three structural decisions carry that:
 

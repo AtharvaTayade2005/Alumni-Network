@@ -186,20 +186,57 @@ transaction as the status change.
 
 ## Connections — `/api/connections`
 
+Full reference: [networking.md](networking.md).
+
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/` | bearer | List connections, filterable by status |
-| GET | `/pending` | bearer | Incoming and outgoing requests |
+| GET | `/requests`, `/pending` | bearer | Incoming requests |
 | GET | `/stats` | bearer | Connection counts by status |
 | GET | `/status/:userId` | bearer | `none`, `pending_incoming`, `pending_outgoing`, `connected`, `blocked` |
 | GET | `/mutuals/:userId` | bearer | Shared connections |
 | POST | `/` | bearer | Send a request; body `{ userId, message? }` |
-| PATCH | `/:connectionId` | bearer | Accept or decline; body `{ action }` |
-| DELETE | `/:userId` | bearer | Remove a connection |
-| POST | `/block/:userId` | bearer | Block a user |
+| POST | `/:userId` | bearer | Send a request to the member in the path |
+| PATCH | `/:id/accept`, `/:id/reject` | bearer | Answer an incoming request |
+| PATCH | `/:connectionId` | bearer | Legacy `{ action: "accept" \| "decline" }` |
+| DELETE | `/:id` | bearer | Remove the connection by id |
+| POST | `/:userId/block`, `/block/:userId` | bearer | Block a member |
+| DELETE | `/:userId/block`, `/block/:userId` | bearer | Unblock a member |
 
-A connection pair is unique regardless of who initiated it. Blocking sets the
-pair to `blocked`, which also revokes messaging access.
+A connection pair is unique regardless of who initiated it, so a retry after a
+rejection revives the existing row and a simultaneous double-send resolves to
+`409`. Blocking sets the pair to `blocked` with `requester_id` as the blocker, and
+both members read `blocked` — the blocked one is not told. Blocking also revokes
+messaging and mentorship access.
+
+---
+
+## Mentorship — `/api/mentorship`
+
+Full reference: [mentorship.md](mentorship.md).
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/mentors` | bearer | Verified alumni who are opted in and have room |
+| GET | `/requests` | bearer | The caller's requests; `role`, `status`, paginated |
+| POST | `/requests` | bearer | Ask a mentor; body `{ mentorId, careerGoal, interestArea, … }` |
+| GET | `/requests/:id` | bearer | One request (participants only) |
+| PATCH | `/requests/:id/accept`, `/reject` | bearer | Mentor's answer; body `{ responseNote? }` |
+| PATCH | `/requests/:id/cancel` | bearer | Mentee withdraws |
+| PATCH | `/requests/:requestId` | bearer | Legacy `{ status, responseNote? }` |
+| DELETE | `/requests/:requestId` | bearer | Legacy alias of `/cancel` |
+| GET | `/relationships`, `/mentorships` | bearer | The caller's mentorships |
+| PATCH | `/relationships/:id/complete` | bearer | Finished: relationship and request both COMPLETED |
+| PATCH | `/relationships/:id/end` | bearer | Ended early; relationship ENDED, request stays ACCEPTED |
+
+A mentorship requires an accepted connection, a mentor who is a **verified
+alumnus** with `is_open_to_mentor` set, and a free slot. Capacity is re-checked
+under a row lock when the request is accepted, so a mentor whose slots filled up
+gets `409` and the mentee receives no notification. Completing or ending frees the
+slot.
+
+`interestArea`/`preferredCommunication` and `areaOfInterest`/`preferredMode` are
+accepted and returned interchangeably.
 
 ---
 
@@ -233,6 +270,13 @@ authenticate the handshake with the access token; presence is tracked in the
 | PATCH | `/:id/read` | bearer | Mark one notification read |
 | POST | `/read-all` | bearer | Mark all read |
 | DELETE | `/:id` | bearer | Delete a notification |
+
+Preferences are per type: `emailEnabled` off still leaves the in-app
+notification, and a type in `mutedTypes` suppresses both. Notifications that
+describe a state change are written inside the same transaction as that change,
+so a rollback cannot leave a notification about something that did not happen.
+Deleting a member who acted in a notification sets `actor_id` to `null` rather
+than deleting the notification.
 
 ---
 

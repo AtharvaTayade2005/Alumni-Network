@@ -67,7 +67,10 @@ SELECT
   (ARRAY['Pakistan','United Kingdom','Canada','Germany','Nigeria'])[1 + (g % 5)],
   24 + (g % 60) * 0.1,
   60 + (g % 90) * 0.1,
-  g % 2 = 0,
+  -- Only a verified alumnus may advertise, since migration 011; the trigger would
+  -- reject the whole INSERT otherwise. Every sixth row is therefore both verified
+  -- and opted in, which is still a large, varied subset for the planner.
+  g % 6 = 0,
   CASE WHEN g % 3 = 0 THEN 'verified' WHEN g % 3 = 1 THEN 'pending' ELSE 'rejected' END
 FROM generate_series(1, $1) AS g
 JOIN users u ON u.email = 'perf' || g || '@example.edu'`

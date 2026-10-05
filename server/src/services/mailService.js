@@ -9,8 +9,12 @@ import { buildTemplate } from './templates.js'
  * request latency independent of the mail provider and survives provider
  * outages without failing user-facing operations.
  */
-export async function enqueue({ to, subject, template, payload = {} }) {
-  const { rows } = await query(
+export async function enqueue({ to, subject, template, payload = {}, db = null }) {
+  // A caller inside a transaction must pass its client. The shared pool is a
+  // different connection, and on a single-connection development database the
+  // transaction would wait on itself until it timed out.
+  const runner = db ?? { query }
+  const { rows } = await runner.query(
     `INSERT INTO email_queue (to_email, subject, template, payload)
      VALUES ($1,$2,$3,$4) RETURNING id`,
     [to, subject, template, JSON.stringify(payload)],
@@ -38,8 +42,8 @@ export async function queuePasswordResetEmail(email, token) {
   })
 }
 
-export async function queueEmail(to, subject, template, payload = {}) {
-  return enqueue({ to, subject, template, payload })
+export async function queueEmail(to, subject, template, payload = {}, db = null) {
+  return enqueue({ to, subject, template, payload, db })
 }
 
 export async function claimBatch(limit = 10) {

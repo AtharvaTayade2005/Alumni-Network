@@ -60,12 +60,21 @@ export async function decide({ userId, status, reviewerId, reason = null }) {
       throw conflict(`This alumni profile is already ${toApiStatus(next)}`)
     }
 
+    // Revoking verification also closes the mentor listing, because the
+    // alumni_mentor_listing_requires_verification trigger (migration 011) rejects
+    // an unverified alumnus who still advertises, and a rejected alumnus must not
+    // stay discoverable as a mentor. Capacity is left alone so the alumnus does not
+    // have to renumber their slots if verification is granted again.
+    const mentorListing = next === 'verified' ? '' : 'is_open_to_mentor = FALSE,'
+
     const updated = await client.query(
       `UPDATE alumni_profiles
           SET verification_status = $2,
               verified_by = $3,
               verified_at = NOW(),
-              verification_notes = $4
+              verification_notes = $4,
+              ${mentorListing}
+              updated_at = NOW()
         WHERE user_id = $1
         RETURNING user_id, verification_status, verified_by, verified_at,
                   verification_notes`,

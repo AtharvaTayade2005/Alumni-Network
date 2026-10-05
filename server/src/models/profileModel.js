@@ -63,12 +63,26 @@ export async function upsertAlumniProfile(userId, data) {
   return rows[0]
 }
 
+/**
+ * Writes the 001 student columns, creating the row when it is missing.
+ *
+ * `degree` is the one student column that is NOT NULL without a default, and
+ * PostgreSQL checks NOT NULL against the tuple an INSERT proposes *before* it
+ * resolves ON CONFLICT. A partial update that leaves degree out would therefore
+ * fail with 23502 even though the row exists and the DO UPDATE branch would have
+ * preserved the column. The proposed tuple is given the stored value as its
+ * fallback so a partial write behaves like the COALESCE it already is.
+ */
 export async function upsertStudentProfile(userId, data) {
   const { rows } = await query(
     `INSERT INTO student_profiles (
        user_id, degree, department, year_of_study, expected_graduation,
        career_interests, bio, is_open_to_mentorship, city, region, country
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ) VALUES (
+       $1,
+       COALESCE($2, (SELECT degree FROM student_profiles WHERE user_id = $1)),
+       $3, $4, $5, $6, $7, $8, $9, $10, $11
+     )
      ON CONFLICT (user_id) DO UPDATE SET
        degree = COALESCE(EXCLUDED.degree, student_profiles.degree),
        department = COALESCE(EXCLUDED.department, student_profiles.department),

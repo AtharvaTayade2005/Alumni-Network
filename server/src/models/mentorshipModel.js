@@ -189,8 +189,14 @@ export async function findRelationshipWithPeer(id, viewerId) {
   return rows[0] ?? null
 }
 
-export async function endRelationship(id, { endedBy, endReason }) {
-  const { rows } = await query(
+/**
+ * Ends a relationship early.
+ *
+ * Unlike completion, this leaves the request at 'accepted': the pairing did
+ * happen, it just stopped, and 'ended' on the relationship is what records that.
+ */
+export async function endRelationship(id, { endedBy, endReason }, db = { query }) {
+  const { rows } = await db.query(
     `UPDATE mentorship_relationships
      SET status = 'ended', ended_at = NOW(), ended_by = $2, end_reason = $3,
          updated_at = NOW()
@@ -201,15 +207,33 @@ export async function endRelationship(id, { endedBy, endReason }) {
   return rows[0] ?? null
 }
 
-export async function completeRelationship(id) {
-  const { rows } = await query(
+/**
+ * Marks a relationship complete and moves its originating request to
+ * 'completed' in the same statement pair.
+ *
+ * The request row is updated alongside the relationship because leaving it at
+ * 'accepted' would make an active mentorship and a finished one look identical in
+ * the request list; 011 adds 'completed' to the request status constraint for
+ * exactly this. Both writes run on `db` so a caller can commit them together.
+ */
+export async function completeRelationship(id, db = { query }) {
+  const { rows } = await db.query(
     `UPDATE mentorship_relationships
      SET status = 'completed', ended_at = NOW(), updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
     [id],
   )
-  return rows[0] ?? null
+  const relationship = rows[0] ?? null
+  if (!relationship) return null
+
+  await db.query(
+    `UPDATE mentorship_requests
+     SET status = 'completed', updated_at = NOW()
+     WHERE id = $1`,
+    [relationship.request_id],
+  )
+  return relationship
 }
 
 /** Number of live mentorships a mentor is already carrying. */
@@ -222,7 +246,41 @@ export async function countActiveMentorships(mentorId) {
   return rows[0].c
 }
 
-/** Shapes a request row with the counterparty resolved to `viewerId`. */
+/** Storage is lowercase; the API contract is uppercase, as in Phase 2 verification. */
+const REQUEST_STATES = {
+  pending: 'PENDING',
+  accepted: 'ACCEPTED',
+  rejected: 'REJECTED',
+  cancelled: 'CANCELLED',
+  completed: 'COMPLETED',
+}
+
+const RELATIONSHIP_STATES = {
+  active: 'ACTIVE',
+  completed: 'COMPLETED',
+  ended: 'ENDED',
+}
+
+/** Accepts a state filter in either casing so existing lowercase callers keep working. */
+export function normaliseRequestState(value) {
+  if (value == null) return undefined
+  const key = String(value).trim().toLowerCase()
+  return REQUEST_STATES[key] ? key : undefined
+}
+
+export function normaliseRelationshipState(value) {
+  if (value == null) return undefined
+  const key = String(value).trim().toLowerCase()
+  return RELATIONSHIP_STATES[key] ? key : undefined
+}
+
+/**
+ * Shapes a request row with the counterparty resolved to `viewerId`.
+ *
+ * The four fields the Phase 3 spec names are exposed under the spec's spelling
+ * (`interestArea`, `preferredCommunication`) while the original names stay on the
+ * row, so a client written against either contract reads the same value.
+ */
 export function formatRequest(row, viewerId) {
   const iAmMentor = row.mentor_id === viewerId
   return {
@@ -233,10 +291,12 @@ export function formatRequest(row, viewerId) {
     menteeId: row.mentee_id,
     peerId: iAmMentor ? row.mentee_id : row.mentor_id,
     careerGoal: row.career_goal,
+    interestArea: row.area_of_interest,
     areaOfInterest: row.area_of_interest,
     message: row.message,
+    preferredCommunication: row.preferred_mode,
     preferredMode: row.preferred_mode,
-    status: row.status,
+    status: REQUEST_STATES[row.status] ?? row.status.toUpperCase(),
     responseNote: row.response_note,
     respondedAt: row.responded_at,
     createdAt: row.created_at,
@@ -260,7 +320,7 @@ export function formatRelationship(row, viewerId) {
     mentorId: row.mentor_id,
     menteeId: row.mentee_id,
     peerId: iAmMentor ? row.mentee_id : row.mentor_id,
-    status: row.status,
+    status: RELATIONSHIP_STATES[row.status] ?? row.status.toUpperCase(),
     startedAt: row.started_at,
     endedAt: row.ended_at,
     endReason: row.end_reason,

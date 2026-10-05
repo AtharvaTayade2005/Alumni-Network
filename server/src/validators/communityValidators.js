@@ -186,25 +186,68 @@ export const rsvpSchema = z.object({
   note: optionalText(500),
 })
 
+const mentorshipModeSchema = z.enum(['email', 'chat', 'call', 'video'])
+
+/**
+ * POST /api/mentorship/requests.
+ *
+ * The Phase 3 spec names the fields `interestArea` and `preferredCommunication`;
+ * the original API used `areaOfInterest` and `preferredMode`. Both spellings are
+ * accepted so neither client contract breaks, and the service resolves them.
+ *
+ * Exactly one spelling of each aliased pair must be present, which is why the
+ * pair cannot simply be optional on both sides.
+ */
 export const mentorshipRequestSchema = z.object({
   mentorId: uuidSchema,
   careerGoal: z.string().trim().min(20, 'Describe your career goal in at least 20 characters').max(2000),
-  areaOfInterest: z.string().trim().min(2).max(150),
+  interestArea: z.string().trim().min(2).max(150).optional(),
+  areaOfInterest: z.string().trim().min(2).max(150).optional(),
   message: optionalText(2000),
-  preferredMode: z.enum(['email', 'chat', 'call', 'video']).default('email'),
+  preferredCommunication: mentorshipModeSchema.optional(),
+  preferredMode: mentorshipModeSchema.optional(),
+}).superRefine((data, ctx) => {
+  if (!data.interestArea && !data.areaOfInterest) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['interestArea'],
+      message: 'interestArea is required',
+    })
+  }
+  if (data.interestArea && data.areaOfInterest && data.interestArea !== data.areaOfInterest) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['areaOfInterest'],
+      message: 'interestArea and areaOfInterest disagree; send only one',
+    })
+  }
+  if (data.preferredCommunication && data.preferredMode
+      && data.preferredCommunication !== data.preferredMode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['preferredMode'],
+      message: 'preferredCommunication and preferredMode disagree; send only one',
+    })
+  }
 })
+// Applied server-side so a missing preferredCommunication still defaults.
+export const mentorshipRequestDefaults = { preferredMode: 'email' }
 
 export const mentorshipRespondSchema = z.object({
   status: z.enum(['accepted', 'rejected']),
   responseNote: optionalText(1000),
 })
 
-export const mentorshipQuerySchema = z.object({
+export const mentorshipRequestQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
-  status: z.enum(['pending', 'accepted', 'rejected', 'cancelled']).optional(),
+  status: z.enum(['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED',
+    'pending', 'accepted', 'rejected', 'cancelled', 'completed']).optional(),
   role: z.enum(['mentor', 'mentee', 'all']).default('all'),
 })
+
+/** Legacy alias, kept because the mentorship routes import this name. */
+export const mentorshipQuerySchema = mentorshipRequestQuerySchema
 
 export const connectionSchema = z.object({
   addresseeId: uuidSchema,

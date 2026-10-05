@@ -87,7 +87,11 @@ function studentPayload(body) {
   set('yearOfStudy', body.yearOfStudy)
   set('careerInterests', body.careerInterests)
   set('bio', body.bio)
-  set('isOpenToMentorship', body.mentorshipAvailable)
+  // Deliberately not `mentorshipAvailable`: on an alumni profile that field means
+  // "I will mentor", and reading a student's willingness to be mentored that way
+  // would let a student advertise as a mentor. A student's own flag is set
+  // through openToMentorship.
+  set('isOpenToMentorship', body.openToMentorship)
   return payload
 }
 
