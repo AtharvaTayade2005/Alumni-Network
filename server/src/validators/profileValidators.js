@@ -77,10 +77,14 @@ export const experienceSchema = z.object({
   title: z.string().trim().min(2).max(150),
   location: z.string().trim().max(150).optional().nullable(),
   description: optionalText(2000),
+  employmentType: z.enum(['full_time', 'part_time', 'contract', 'internship',
+    'freelance', 'volunteer', 'self_employed']).optional().nullable(),
   isCurrent: z.boolean().default(false),
   startDate: z.coerce.date().optional().nullable(),
   endDate: z.coerce.date().optional().nullable(),
 }).refine(
+  // A current role has no end date; clearing it keeps the record consistent
+  // with the experience_current_no_end_check constraint added in migration 009.
   (data) => !data.isCurrent || !data.endDate,
   { message: 'A current role cannot have an end date', path: ['endDate'] },
 ).refine(
@@ -88,9 +92,28 @@ export const experienceSchema = z.object({
   { message: 'End date must be after the start date', path: ['endDate'] },
 )
 
+/**
+ * A URL must be absolute and use http(s).
+ *
+ * Zod's `.url()` accepts `javascript:` and `data:` because they are technically
+ * valid URLs, so the protocol is checked explicitly. Stored links are rendered
+ * as hrefs by clients, which makes an accepted `javascript:` value a stored XSS
+ * vector.
+ */
+export const httpUrlSchema = z.string().trim().max(500)
+  .url('Enter a valid URL')
+  .refine((value) => {
+    try {
+      const parsed = new URL(value)
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }, 'Only http and https URLs are allowed')
+
 export const socialLinkSchema = z.object({
   platform: z.enum(['linkedin', 'github', 'portfolio', 'twitter', 'website', 'other']),
-  url: z.string().trim().url('Enter a valid URL').max(500),
+  url: httpUrlSchema,
   isPrimary: z.boolean().default(false),
 })
 
@@ -111,6 +134,10 @@ export const skillSearchSchema = z.object({
  * A single PATCH /profiles/me endpoint serves both member types, so the
  * accepted body is the union of the user, alumni and student fields. Every
  * field is optional; the service layer applies partial updates.
+ *
+ * Both the Phase 2 camelCase names (jobTitle, major) and the 001 column names
+ * (currentPosition, department) are accepted, because the mentorship, jobs and
+ * connection modules still speak the latter and clients were written against it.
  */
 export const updateProfileSchema = z.object({
   firstName: nameSchema.optional(),
@@ -121,9 +148,13 @@ export const updateProfileSchema = z.object({
     .max(new Date().getFullYear() + 10).optional().nullable(),
   degree: z.string().trim().max(150).optional().nullable(),
   department: z.string().trim().max(150).optional().nullable(),
+  major: z.string().trim().max(150).optional().nullable(),
+  university: z.string().trim().max(200).optional().nullable(),
   currentCompany: z.string().trim().max(150).optional().nullable(),
   currentPosition: z.string().trim().max(150).optional().nullable(),
+  jobTitle: z.string().trim().max(150).optional().nullable(),
   industry: z.string().trim().max(120).optional().nullable(),
+  location: z.string().trim().max(255).optional().nullable(),
 
   yearOfStudy: z.coerce.number().int().min(1).max(10).optional().nullable(),
   expectedGraduation: z.coerce.number().int().min(1950)
@@ -184,4 +215,106 @@ export const mentorsQuerySchema = z.object({
   industry: z.string().trim().max(120).optional(),
   skill: z.string().trim().max(100).optional(),
   availableOnly: z.enum(['true', 'false']).default('true'),
+})
+
+// =========================================================
+// Phase 2: profile write, verification and directory
+// =========================================================
+
+const graduationYear = z.coerce.number().int().min(1950).max(2200)
+
+/**
+ * PUT /api/profiles/me and PUT /api/alumni/me.
+ *
+ * Every field is optional so the endpoint behaves as a partial update, matching
+ * the existing PATCH /profiles/me. Fields are also constrained to null rather
+ * than merely omitted, which is how a member clears a value.
+ */
+export const putAlumniProfileSchema = z.object({
+  graduationYear: graduationYear.optional().nullable(),
+  degree: z.string().trim().max(150).optional().nullable(),
+  major: z.string().trim().max(150).optional().nullable(),
+  university: z.string().trim().max(200).optional().nullable(),
+  currentCompany: z.string().trim().max(150).optional().nullable(),
+  jobTitle: z.string().trim().max(150).optional().nullable(),
+  industry: z.string().trim().max(120).optional().nullable(),
+  location: z.string().trim().max(255).optional().nullable(),
+  city: z.string().trim().max(120).optional().nullable(),
+  region: z.string().trim().max(120).optional().nullable(),
+  country: z.string().trim().max(120).optional().nullable(),
+  bio: optionalText(2000),
+  profilePhoto: httpUrlSchema.optional().nullable(),
+  mentorshipAvailable: z.boolean().optional(),
+  mentorshipCapacity: z.coerce.number().int().min(0).max(10).optional(),
+  showOnMap: z.boolean().optional(),
+  privacy: privacySettingsSchema.optional(),
+  skills: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+}).refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'Provide at least one field to update' },
+)
+
+export const putStudentProfileSchema = z.object({
+  degree: z.string().trim().max(150).optional().nullable(),
+  major: z.string().trim().max(150).optional().nullable(),
+  graduationYear: graduationYear.optional().nullable(),
+  university: z.string().trim().max(200).optional().nullable(),
+  location: z.string().trim().max(255).optional().nullable(),
+  bio: optionalText(2000),
+  careerInterests: optionalText(1500),
+  profilePhoto: httpUrlSchema.optional().nullable(),
+  yearOfStudy: z.coerce.number().int().min(1).max(10).optional().nullable(),
+  privacy: privacySettingsSchema.optional(),
+  skills: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+}).refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'Provide at least one field to update' },
+)
+
+/**
+ * Admin verification decision. Verifying accepts an optional note; rejecting
+ * requires a reason, which is a separate schema so the requirement is enforced
+ * on the reject route rather than by a conditional refine.
+ */
+export const verifySchema = z.object({
+  reason: z.string().trim().max(1000).optional().nullable(),
+})
+
+export const rejectReasonSchema = z.object({
+  reason: z.string().trim().min(3, 'A reason is required to reject a verification')
+    .max(1000),
+})
+
+export const verificationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().max(120).optional(),
+})
+
+/**
+ * GET /api/alumni. Each parameter maps to an indexed column; `sort` is an
+ * allow-list so it cannot be used to inject SQL through ORDER BY.
+ */
+export const alumniDirectorySchema = z.object({
+  search: z.string().trim().max(120).optional(),
+  graduationYear: graduationYear.optional(),
+  graduationYearFrom: graduationYear.optional(),
+  graduationYearTo: graduationYear.optional(),
+  major: z.string().trim().max(150).optional(),
+  location: z.string().trim().max(150).optional(),
+  employer: z.string().trim().max(150).optional(),
+  industry: z.string().trim().max(120).optional(),
+  skills: z.string().trim().max(300).optional(),
+  openToMentor: z.coerce.boolean().optional(),
+  verifiedOnly: z.coerce.boolean().default(false),
+  hasLocation: z.coerce.boolean().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  sort: z.enum(['relevance', 'name', 'recent', 'graduation_year', 'company', 'industry'])
+    .default('relevance'),
+  order: z.enum(['asc', 'desc']).default('asc'),
+})
+
+export const facetsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(50),
 })

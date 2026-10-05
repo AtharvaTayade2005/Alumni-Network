@@ -110,10 +110,15 @@ account enumeration.
 
 ## Profiles — `/api/profiles`
 
+Full reference: [profiles.md](profiles.md). Privacy rules: [../backend/privacy.md](../backend/privacy.md).
+
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/me` | bearer | Profile bundle: user, role profile, skills, education, experience, socials, privacy |
+| PUT | `/me` | bearer | Full or partial update; dispatches on profile type |
 | PATCH | `/me` | bearer | Partial update; `skills` is synced case-insensitively |
+| PUT | `/alumni/me` | bearer | Alumni-only update (`/api/alumni/me`) |
+| PUT | `/students/me` | bearer | Student-only update (`/api/students/me`) |
 | GET | `/me/education` | bearer | Education history |
 | POST | `/me/education` | bearer | Add an education entry |
 | DELETE | `/me/education/:id` | bearer | Delete an entry |
@@ -125,6 +130,10 @@ account enumeration.
 | DELETE | `/me/social-links/:id` | bearer | Delete a social link |
 | GET | `/me/privacy` | bearer | Privacy settings |
 | PATCH | `/me/privacy` | bearer | Update privacy settings |
+| POST | `/me/photo` | bearer | Upload a profile photo (JPEG/PNG/WebP/GIF, 2 MB) |
+| DELETE | `/me/photo` | bearer | Delete the stored profile photo |
+| POST | `/me/verification` | bearer | Submit an alumni profile for verification |
+| GET | `/me/verification` | bearer | Verification decision history |
 | POST | `/me/resume` | bearer | Upload a resume (PDF/DOC/DOCX, 5 MB) |
 | GET | `/me/resume` | bearer | Resume metadata and download URL |
 | DELETE | `/me/resume` | bearer | Delete the stored resume |
@@ -139,6 +148,39 @@ Notification preferences live under `/api/notifications`, not here.
 
 Latitude and longitude must be supplied together and are range-checked
 (latitude ±90, longitude ±180).
+
+`verification_status` is lowercase in the database and uppercase
+(`PENDING`/`VERIFIED`/`REJECTED`) in responses.
+
+---
+
+## Alumni Directory — `/api/alumni`
+
+Full reference: [directory.md](directory.md).
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/` | bearer | Search, filter, sort and paginate the directory |
+| GET | `/facets` | bearer | Distinct filter values with counts |
+| GET | `/locations` | bearer | Grouped locations for autocomplete |
+| GET | `/me`, `/me/*` | bearer | The caller's own alumni profile (see above) |
+| GET | `/:userId` | bearer | One alumni profile, redacted for the viewer |
+
+---
+
+## Admin Verification — `/api/admin/alumni`
+
+Requires the `ADMIN` role.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/pending` | admin | Verification review queue, oldest first |
+| GET | `/:userId` | admin | Full profile detail for review |
+| PATCH | `/:userId/verify` | admin | Mark verified |
+| PATCH | `/:userId/reject` | admin | Mark rejected; `reason` required |
+
+Every decision appends a row to `alumni_verification_events` in the same
+transaction as the status change.
 
 ---
 

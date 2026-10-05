@@ -1,9 +1,12 @@
 # Database
 
-PostgreSQL 13 or newer. No extensions are required: `gen_random_uuid()` is core
-from 13 onwards and case-insensitive uniqueness uses functional unique indexes
-instead of `citext`. That keeps the schema installable on managed instances
-where the role cannot create extensions.
+PostgreSQL 13 or newer. The core schema needs no extensions: `gen_random_uuid()`
+is core from 13 onwards and case-insensitive uniqueness uses functional unique
+indexes instead of `citext`. That keeps the schema installable on managed
+instances where the role cannot create extensions.
+
+Migration 010 optionally uses `pg_trgm`, and is written to skip cleanly when the
+extension is unavailable. See [Phase 2 tables](#phase-2-tables).
 
 ## Migrations
 
@@ -54,6 +57,19 @@ committed:
 Override with `SEED_ADMIN_EMAIL`, `SEED_ALUMNI_EMAIL`, `SEED_STUDENT_EMAIL` and
 the matching `SEED_*_PASSWORD` variables. These accounts are predictable, so the
 seeder **throws if `NODE_ENV=production`**; never weaken that guard.
+
+## Verifying the schema
+
+```bash
+npm run verify:migrations   # apply, inspect, roll back, re-apply, assert
+npm run perf:directory      # seed 50k alumni and time the directory queries
+```
+
+`verify:migrations` applies the whole chain to a throwaway database, then checks
+the columns, triggers, constraints and indexes Phase 2 relies on; confirms that
+constraints actually reject bad data; confirms cascade deletes; and finally rolls
+every reversible migration back and applies them forward again. It is the
+executable version of this document — if the two disagree, the script is right.
 
 ## Phase 1 tables
 
@@ -110,6 +126,165 @@ triggered it. With `MAIL_DRIVER=log` the rendered link stays in
   connection and mentorship states) rather than relying on application validation
 - indexes back every access path the application uses: email lookup, account
   status, token user, and the listing/sort columns
+
+## Phase 2 tables
+
+Migration 001 already created every profile, privacy and skills table, so Phase 2
+is **additive**: two migrations, `009_phase2_profiles.sql` and
+`010_directory_trigram.sql`. Nothing was renamed or dropped.
+
+### Column aliases, and why they are not renames
+
+The specification names four fields differently from what 001 had:
+
+| Phase 2 name | 001 column | Why the old one stayed |
+| --- | --- | --- |
+| `major` | `department` | Read by mentorship, jobs and connection modules |
+| `jobTitle` | `current_position` | Same |
+| `university` | *(none)* | New |
+| `location` | `city` + `region` + `country` | Composed from the three |
+
+Renaming in place would break three modules that are outside this phase, so
+`sync_alumni_profile_aliases()` and `sync_student_profile_aliases()` keep both
+spellings in step with a `BEFORE INSERT OR UPDATE` trigger. Whichever column
+changes propagates to the other, so they cannot drift apart. Do not update either
+side from application code expecting the other to notice; the trigger is the only
+supported path.
+
+`location` is composed from the parts with `CONCAT_WS(', ', ...)`, but an
+explicitly supplied `location` always wins. That keeps a member who typed a
+sentence ("Based in Lahore, remote from Berlin") from having it overwritten.
+
+`profile_photo` also syncs to `users.avatar_url` in the same trigger, so there is
+one visible image regardless of which column was written.
+
+### alumni_profiles, student_profiles
+
+Added to `alumni_profiles`: `major`, `university`, `job_title`, `location`,
+`profile_photo`.
+
+Added to `student_profiles`: `major`, `university`, `graduation_year`,
+`location`, `profile_photo`. A student's `graduation_year` seeds
+`expected_graduation` through the same trigger mechanism.
+
+`verification_status` stays lowercase (`pending`/`verified`/`rejected`) because
+that is the check constraint 001 defined and other phases compare against it. The
+API layer is what maps it to the uppercase `PENDING`/`VERIFIED`/`REJECTED`. Moving
+the storage representation would mean migrating a constraint that three phases
+already depend on.
+
+### Generated columns
+
+| Column | Derived from |
+| --- | --- |
+| `experience.company` | `company_name` |
+| `experience.job_title` | `title` |
+
+Generated rather than duplicated-and-synced, because a generated column cannot
+disagree with its source. They are read-only; the writable columns stay
+`company_name` and `title`.
+
+### education, experience
+
+`education.field` is the specification's name for the existing
+`field_of_study`, backfilled from it. `experience.employment_type` is new and
+constrained to `full_time`, `part_time`, `contract`, `internship`, `freelance`,
+`volunteer`, `self_employed`.
+
+Constraints added:
+
+| Constraint | Rule |
+| --- | --- |
+| `alumni_graduation_year_check` | 1950 … current year + 10 |
+| `student_graduation_year_check` | 1950 … current year + 15 |
+| `education_year_order_check` | `end_year >= start_year` |
+| `experience_employment_type_check` | Enum, or `NULL` |
+| `experience_current_no_end_check` | `is_current` implies no `end_date` |
+
+These exist so that invalid data is impossible rather than merely rejected by the
+API layer; the verification harness asserts each one actually rejects bad input.
+
+### alumni_verification_events
+
+| Column | Notes |
+| --- | --- |
+| `id` | UUID primary key |
+| `user_id` | The reviewed profile; `CASCADE` on user delete |
+| `action` | `submitted`, `verified`, `rejected` |
+| `previous_status`, `new_status` | Lowercase, as on the profile |
+| `reviewer_id` | `NULL` for self-submission, otherwise the admin |
+| `reason` | Required when `action = 'rejected'` |
+| `created_at` | Append-only |
+
+Every verification decision appends a row. The table is never updated, so the
+history of a profile cannot be edited after the fact, and re-verifying appends
+rather than overwrites. A decision takes a `SELECT … FOR UPDATE` row lock and
+writes the profile and the event in one transaction, so the current status and
+the audit trail can never disagree.
+
+### Privacy interaction
+
+`privacy_settings` is unchanged by Phase 2, but it is the reason several
+directory queries join it: directory visibility, location, employer and
+mentorship flags are all applied in SQL, and the per-dimension facet rules in
+[privacy](privacy.md) depend on them. Index `idx_privacy_directory_visible`
+covers the visibility check.
+
+## Indexes
+
+Migration 009 adds 23 indexes. The ones the directory actually depends on:
+
+| Index | Supports |
+| --- | --- |
+| `idx_alumni_directory_graduation` | Default listing and `sort=graduation_year` |
+| `idx_alumni_directory_verified` | Same, for `verifiedOnly` (partial) |
+| `idx_alumni_directory_industry` | `industry` filter and facet |
+| `idx_alumni_directory_company` | `employer` filter and facet |
+| `idx_alumni_directory_major` | `major` filter and facet |
+| `idx_alumni_location_lower` | `location` filter |
+| `idx_alumni_open_to_mentor` | `openToMentor` (partial: opted in **and** verified) |
+| `idx_privacy_directory_visible` | Directory visibility check |
+| `idx_users_name_search` | Keyword search over `lower(first), lower(last)` |
+| `idx_users_last_name_prefix` | Default name ordering |
+| `idx_skills_name_prefix` | `text_pattern_ops` prefix skill search |
+| `idx_user_skills_user_skill` | The `skills` filter and per-page skill fetch |
+
+The rest cover sub-resource lookups (`education`, `experience`, `social_links`)
+and the verification event history.
+
+**On partial indexes.** `idx_alumni_directory_verified` and
+`idx_alumni_open_to_mentor` are partial; the rest are not. The directory indexes
+were partial on `verification_status = 'verified'` at first, which turned out to
+be backwards: `verifiedOnly` defaults to `false`, so the default query matched no
+index and sorted every row. Removing the predicate roughly halved the filter
+timings. Partial indexes are now reserved for genuinely small subsets, where
+keeping the index small is the point.
+
+### Trigram indexes, and why migration 010 is guarded
+
+A btree index cannot serve `ILIKE '%term%'`: a leading wildcard makes the
+pattern unknown at plan time, so the planner cannot use the index. Trigram GIN
+indexes can, which is what `010_directory_trigram.sql` adds for the free-text
+columns.
+
+`pg_trgm` is a compiled extension: present on stock PostgreSQL, absent from
+PGlite, which is what the test suite runs on. An unguarded `CREATE EXTENSION`
+would fail the whole migration chain in tests, and a bare `gin_trgm_ops` index
+class would fail on any server where a DBA declined to install it. So 010 checks
+`pg_available_extensions`, creates the extension only when installable, creates
+the indexes only if the extension ended up present, and catches any failure with
+a `WARNING` rather than aborting.
+
+On a server without `pg_trgm`, the migration still applies and the directory
+still works — the substring and ILIKE filters fall back to sequential scans over
+the indexes above. Slower, not broken.
+
+`npm run perf:directory` seeds 50,000 alumni, runs `ANALYZE`, and times the real
+queries against a 1000ms budget. It prints the plan as well as the timings, so
+the difference between the sequential-scan and index-scan cases is visible rather
+than inferred. Measured results are in the
+[directory documentation](../api/directory.md#performance). Run it against real
+PostgreSQL before trusting the two search rows; PGlite has no trigram indexes.
 
 ## Local development
 

@@ -20,7 +20,9 @@
     "dev:db": "node scripts/dev-postgres.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "test:watch": "node --test --watch \"tests/**/*.test.js\"",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "verify:migrations": "node scripts/verify-migrations.mjs",
+    "perf:directory": "node scripts/perf-directory.mjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

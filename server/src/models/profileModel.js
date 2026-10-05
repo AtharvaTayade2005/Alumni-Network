@@ -317,10 +317,11 @@ export async function listExperience(userId) {
 export async function addExperience(userId, data) {
   const { rows } = await query(
     `INSERT INTO experience (user_id, company_id, company_name, title, location,
-       description, is_current, start_date, end_date)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+       description, employment_type, is_current, start_date, end_date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *, company, job_title`,
     [userId, data.companyId ?? null, data.companyName, data.title,
-      data.location ?? null, data.description ?? null, data.isCurrent ?? false,
+      data.location ?? null, data.description ?? null,
+      data.employmentType ?? null, data.isCurrent ?? false,
       data.startDate ?? null, data.endDate ?? null],
   )
   return rows[0]
