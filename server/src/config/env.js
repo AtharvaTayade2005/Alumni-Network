@@ -159,6 +159,20 @@ export const config = {
     emailVerifyHours: int(process.env.EMAIL_TOKEN_HOURS, 48),
     passwordResetHours: int(process.env.PASSWORD_RESET_HOURS, 2),
   },
+
+  /**
+   * Scheduled work.
+   *
+   * The interval is how often the scheduler wakes up to look for work, not how
+   * long a job may take: every job claims a run key first, so a second wake-up
+   * while the first is still running does nothing. `enabled` is off in tests,
+   * where the sweeps are asked for directly instead of waited for.
+   */
+  scheduler: {
+    enabled: isTest ? false : bool(process.env.SCHEDULER_ENABLED, true),
+    intervalMs: int(process.env.SCHEDULER_INTERVAL_MS, 15 * 60 * 1000),
+    staleRunMinutes: int(process.env.SCHEDULER_STALE_RUN_MINUTES, 60),
+  },
 }
 
 const requiredInProduction = [

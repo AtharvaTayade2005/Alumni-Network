@@ -35,6 +35,29 @@ ALTER TABLE events ADD CONSTRAINT events_status_check CHECK (status IN
 -- created through any other path was announced before anybody read it.
 ALTER TABLE events ALTER COLUMN status SET DEFAULT 'draft';
 
+-- 001 stored the end as a time of day and required it to be later than the
+-- start time, which cannot express an event that runs past midnight: 02:00 is
+-- earlier than 18:00, so an evening event finishing at two was rejected by the
+-- database rather than stored. The end's own date makes that comparison a pair,
+-- so an evening event can end after midnight and a morning event still cannot
+-- end before it starts.
+ALTER TABLE events
+    ADD COLUMN IF NOT EXISTS end_date  DATE,
+    ADD COLUMN IF NOT EXISTS image_url VARCHAR(500);
+
+UPDATE events SET end_date = event_date WHERE end_date IS NULL;
+
+-- The pair comparison above is only a real answer when both halves have a date. A
+-- NULL end_date would make the comparison unknown, and a CHECK rejects only what
+-- is definitely false, so a direct INSERT that left end_date out could store an
+-- event ending before it starts. Reading a missing end date as the event's own
+-- date keeps the same-day case honest and makes the constraint bite on every row.
+-- (A DEFAULT cannot do this: PostgreSQL forbids a column reference there.)
+ALTER TABLE events DROP CONSTRAINT IF EXISTS events_time_order_check;
+ALTER TABLE events ADD CONSTRAINT events_time_order_check CHECK (
+    (COALESCE(end_date, event_date), end_time) > (event_date, start_time)
+);
+
 -- Cancelling is a decision about an event people were told about, so it
 -- records who did it and when, exactly as a job decision does.
 ALTER TABLE events
@@ -108,6 +131,12 @@ ALTER TABLE event_attendees ADD CONSTRAINT event_attendees_unique UNIQUE (event_
 -- A check-in is a fact about a moment, so it is stamped when it happens rather
 -- than when the row was created. NULL means "on the list, not arrived yet".
 ALTER TABLE event_attendees ADD COLUMN IF NOT EXISTS checked_in_by UUID REFERENCES users (id) ON DELETE SET NULL;
+
+-- The organizer's private note about somebody who came: why they were on the
+-- roster, whether they brought anybody, anything the next organizer should know.
+-- It is on the attendee row rather than on the RSVP because the roster covers
+-- walk-ins, who never had an RSVP to write a note on.
+ALTER TABLE event_attendees ADD COLUMN IF NOT EXISTS notes TEXT;
 
 DROP TRIGGER IF EXISTS trg_event_attendees_updated_at ON event_attendees;
 CREATE TRIGGER trg_event_attendees_updated_at
@@ -311,13 +340,18 @@ CREATE TABLE IF NOT EXISTS background_jobs (
     run_key      VARCHAR(200) PRIMARY KEY,
     job_name     VARCHAR(80) NOT NULL,
     status       VARCHAR(20) NOT NULL DEFAULT 'running',
+    -- How many times this window has been claimed. A crash leaves the first
+    -- attempt behind, and the retry that takes it over bumps this, so a window
+    -- that keeps dying is visible without a separate history table.
+    attempts     INTEGER NOT NULL DEFAULT 1,
     started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     finished_at  TIMESTAMPTZ,
     -- What the run did, for an operator reading the table after an incident.
     result       JSONB,
     error        TEXT,
     CONSTRAINT background_jobs_status_check CHECK (status IN
-        ('running', 'succeeded', 'failed', 'skipped'))
+        ('running', 'succeeded', 'failed', 'skipped')),
+    CONSTRAINT background_jobs_attempts_check CHECK (attempts >= 1)
 );
 
 -- "Which jobs failed, and when?" is the only query an operator runs against
@@ -329,3 +363,7 @@ CREATE INDEX IF NOT EXISTS idx_background_jobs_status_started
 -- disable a job permanently. Nothing deletes rows here on purpose: the ledger
 -- is how a duplicate send gets explained afterwards. Reaping is the
 -- scheduler's job, not the database's, so this stays a plain table.
+--
+-- A takeover reuses the row rather than replacing it: the primary key means a
+-- window has exactly one row, and started_at is reset by the runner that takes
+-- it over, which is what "older than the stale window" is measured against.

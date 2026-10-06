@@ -79,6 +79,11 @@ DROP INDEX IF EXISTS idx_events_reminder_scan;
 DROP TRIGGER IF EXISTS trg_event_attendees_updated_at ON event_attendees;
 ALTER TABLE event_attendees DROP COLUMN IF EXISTS updated_at;
 ALTER TABLE event_attendees DROP COLUMN IF EXISTS checked_in_by;
+ALTER TABLE event_attendees DROP COLUMN IF EXISTS notes;
+
+-- The named uniqueness this migration added goes back off; the unnamed one 001
+-- created is still in place and still enforces the same rule.
+ALTER TABLE event_attendees DROP CONSTRAINT IF EXISTS event_attendees_unique;
 
 ALTER TABLE events DROP CONSTRAINT IF EXISTS events_deadline_before_date;
 ALTER TABLE events DROP CONSTRAINT IF EXISTS events_place_check;
@@ -88,6 +93,19 @@ ALTER TABLE events
     DROP COLUMN IF EXISTS cancelled_at,
     DROP COLUMN IF EXISTS cancelled_by,
     DROP COLUMN IF EXISTS cancelled_reason;
+
+-- The end date goes back to a time of day compared against the start time, which
+-- is what 001 could express. An event that ends after midnight cannot be stored
+-- in the old shape, so such a row is trimmed to the following morning rather
+-- than left to violate the check that is about to be re-added.
+ALTER TABLE events DROP CONSTRAINT IF EXISTS events_time_order_check;
+UPDATE events
+   SET end_time = '23:59:00'
+ WHERE end_date IS DISTINCT FROM event_date AND end_time <= start_time;
+UPDATE events SET end_date = event_date;
+ALTER TABLE events DROP COLUMN IF EXISTS end_date;
+ALTER TABLE events DROP COLUMN IF EXISTS image_url;
+ALTER TABLE events ADD CONSTRAINT events_time_order_check CHECK (end_time > start_time);
 
 -- The vocabulary widens again to what 001 defined, and the default returns to
 -- publishing on creation, which is how the table behaved before this phase.

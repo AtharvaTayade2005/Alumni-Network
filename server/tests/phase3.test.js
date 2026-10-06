@@ -1528,6 +1528,55 @@ describe('phase 3: notifications', () => {
       'a member should not see notifications addressed to someone else')
   })
 
+  it('marks the whole feed read through either spelling of the route', async () => {
+    for (const [method, path] of [['post', '/api/notifications/read-all'], ['patch', '/api/notifications/read-all']]) {
+      const sender = await memberWithToken({})
+      const reader = await memberWithToken({})
+      await request(app)
+        .post(`/api/connections/${reader.member.id}`)
+        .set(asAuth(sender.token)).send({})
+
+      const before = await request(app).get('/api/notifications').set(asAuth(reader.token))
+      assert.ok(before.body.data.length >= 1, `${method} ${path}: nothing to mark read`)
+
+      const marked = await request(app)[method](path).set(asAuth(reader.token))
+      assert.equal(marked.status, 200, `${method} ${path}: ${JSON.stringify(marked.body)}`)
+      assert.ok(marked.body.data.markedRead >= 1)
+
+      const unread = await request(app)
+        .get('/api/notifications/unread-count').set(asAuth(reader.token))
+      assert.equal(unread.body.data.unread, 0)
+    }
+  })
+
+  it('saves preferences through either spelling of the route', async () => {
+    for (const method of ['patch', 'put']) {
+      const member = await memberWithToken({})
+      const res = await request(app)[method]('/api/notifications/preferences')
+        .set(asAuth(member.token))
+        .send({ emailEnabled: true, mutedTypes: ['connection_request', 'event_rsvp'] })
+
+      assert.equal(res.status, 200, `${method}: ${JSON.stringify(res.body)}`)
+
+      const stored = await request(app).get('/api/notifications/preferences').set(asAuth(member.token))
+      assert.equal(stored.status, 200)
+      assert.equal(stored.body.data.emailEnabled, true)
+      assert.deepEqual(
+        [...stored.body.data.mutedTypes].sort(),
+        ['connection_request', 'event_rsvp'],
+      )
+    }
+  })
+
+  it('rejects an unknown notification type in preferences', async () => {
+    const member = await memberWithToken({})
+    const res = await request(app)
+      .put('/api/notifications/preferences')
+      .set(asAuth(member.token))
+      .send({ mutedTypes: ['not_a_real_type'] })
+    assert.equal(res.status, 422, JSON.stringify(res.body))
+  })
+
   it('emails each mentorship event to the member who has to act on it', async () => {
     const mentorName = 'Maya Mentor'
     const studentName = 'Sam Student'

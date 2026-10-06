@@ -7,8 +7,10 @@ import { createProfileRouter, createProfileByIdRouter } from './profileV2Routes.
 import alumniDirectoryRoutes from './alumniDirectoryRoutes.js'
 import connectionRoutes from './connectionRoutes.js'
 import messageRoutes from './messageRoutes.js'
+import conversationRoutes from './conversationRoutes.js'
 import notificationRoutes from './notificationRoutes.js'
 import mentorshipRoutes from './mentorshipRoutes.js'
+import eventRoutes from './eventRoutes.js'
 import jobRoutes from './jobRoutes.js'
 import applicationRoutes from './applicationRoutes.js'
 import fileRoutes from './fileRoutes.js'
@@ -55,8 +57,10 @@ router.use('/students', createProfileByIdRouter({ studentOnly: true }))
 
 router.use('/connections', connectionRoutes)
 router.use('/messages', messageRoutes)
+router.use('/conversations', conversationRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/mentorship', mentorshipRoutes)
+router.use('/events', eventRoutes)
 router.use('/jobs', jobRoutes)
 // The applicant-facing half of the job feature: their own applications, addressed by
 // application rather than by posting, plus the file endpoints that carry a resume.

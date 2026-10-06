@@ -1,15 +1,25 @@
 import app from './src/app.js'
 import config from './src/config/env.js'
-import pool from './src/config/database.js'
+import { closePool } from './src/config/database.js'
+import { startScheduler, stopScheduler } from './src/services/scheduler.js'
+import { initialiseRealtime } from './src/sockets/index.js'
 
 const server = app.listen(config.port, () => {
   console.log(`Alumni Network Portal API listening on port ${config.port}`)
 })
 
+// The websocket server shares the HTTP listener rather than opening a port of its
+// own, so a client on one origin reaches both without a second proxy rule.
+const io = initialiseRealtime(server)
+
+startScheduler()
+
 async function shutdown(signal) {
   console.log(`${signal} received, shutting down`)
+  stopScheduler()
+  await io.close()
   server.close(async () => {
-    if (pool) await pool.end()
+    await closePool()
     process.exit(0)
   })
 }

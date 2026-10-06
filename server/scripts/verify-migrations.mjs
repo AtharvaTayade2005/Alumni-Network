@@ -508,12 +508,42 @@ async function main() {
       && !eventStates.includes("'removed'"),
     eventStates)
 
-  const eventCols = await cols('events')
-  check('an event records who cancelled it and why',
+const eventCols = await cols('events')
+check('an event records who cancelled it and why',
     ['published_at', 'cancelled_at', 'cancelled_by', 'cancelled_reason']
       .every((c) => eventCols.has(c)),
     ['published_at', 'cancelled_at', 'cancelled_by', 'cancelled_reason']
       .filter((c) => !eventCols.has(c)).join(', ') || 'all present')
+check('an event can end after midnight and can carry a picture',
+    eventCols.has('end_date') && eventCols.has('image_url'),
+    ['end_date', 'image_url'].filter((c) => !eventCols.has(c)).join(', ') || 'all present')
+
+  // 001 compared the end time against the start time on its own, so an evening
+  // event finishing at two was rejected rather than stored. The pair comparison
+  // this phase introduces is what lets that row exist at all.
+  const organizerId = phase4.alumni
+  const midnightEvent = await db.query(
+    `INSERT INTO events (organizer_id, title, description, event_date, end_date, start_time,
+        end_time, venue)
+     VALUES ($1, 'Evening event', 'An evening event that runs past midnight', CURRENT_DATE + 1, CURRENT_DATE + 2,
+        '18:00', '02:00', 'Hall') RETURNING id`, [organizerId])
+  const midnightCheck = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'events'::regclass AND conname = 'events_time_order_check'`)
+  check('an event may end after midnight',
+    !!midnightEvent.rows[0]?.id && /end_date/.test(midnightCheck.rows[0]?.def ?? ''),
+    midnightCheck.rows[0]?.def)
+  await rejects('an event may not end before it starts', `
+    UPDATE events SET end_date = event_date, end_time = '09:00'
+      WHERE id = '${midnightEvent.rows[0].id}'`)
+  await rejects('an event with neither a venue nor a link is refused', `
+    INSERT INTO events (organizer_id, title, description, event_date, start_time, end_time)
+    VALUES ('${organizerId}', 'Nowhere', 'No venue and no link', CURRENT_DATE + 1, '10:00', '11:00')`)
+  await rejects('a registration deadline after the event is refused', `
+    INSERT INTO events (organizer_id, title, description, event_date, start_time, end_time, venue,
+        registration_deadline)
+    VALUES ('${organizerId}', 'Late cut-off', 'A deadline after the event itself', CURRENT_DATE + 1, '10:00', '11:00',
+        'Hall', CURRENT_DATE + 5)`)
 
   const attendeeCols = await cols('event_attendees')
   check('the attendee roster has the updated_at its trigger needs',

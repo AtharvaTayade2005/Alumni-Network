@@ -1,4 +1,5 @@
 import { query } from '../config/database.js'
+import { formatPreferences } from '../constants/notificationTypes.js'
 import * as mailService from './mailService.js'
 import { emitToUsers } from '../sockets/index.js'
 
@@ -122,6 +123,10 @@ export function formatNotification(row) {
     link: row.link,
     actorId: row.actor_id,
     isRead: row.is_read,
+    // Whatever the creator attached: an event id, a job id, a thread id. It is
+    // what lets a client act on a notification without parsing the link, which
+    // is brittle the moment the client changes its routing.
+    metadata: row.metadata ?? null,
     createdAt: row.created_at,
   }
 }
@@ -195,7 +200,7 @@ export async function getPreferences(userId) {
      RETURNING *`,
     [userId],
   )
-  return rows[0]
+  return formatPreferences(rows[0])
 }
 
 export async function updatePreferences(userId, data) {
@@ -209,5 +214,5 @@ export async function updatePreferences(userId, data) {
     [userId, data.emailEnabled ?? null, data.inAppEnabled ?? null,
       data.mutedTypes ?? null],
   )
-  return rows[0]
+  return formatPreferences(rows[0])
 }

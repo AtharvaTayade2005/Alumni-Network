@@ -30,7 +30,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
 
   await emitToUsers([req.user.id, recipientId], 'message:new', {
     ...message,
-    conversationId: roomName(req.user.id, recipientId),
+    conversationId: message.conversationId ?? roomName(req.user.id, recipientId),
   })
 
   sendCreated(res, message, 'Message sent')

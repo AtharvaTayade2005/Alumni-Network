@@ -1,4 +1,5 @@
 import { query } from '../config/database.js'
+import * as conversationModel from '../models/conversationModel.js'
 import * as notificationService from '../services/notificationService.js'
 
 const ONLINE_WINDOW = '2 minutes'
@@ -28,13 +29,28 @@ export async function assertConversationMember(userId, peerId) {
   return conn.length > 0
 }
 
-export async function sendMessage({ senderId, recipientId, body }) {
-  const { rows } = await query(
-    `INSERT INTO messages (sender_id, recipient_id, body)
-     VALUES ($1,$2,$3) RETURNING *`,
-    [senderId, recipientId, body],
-  )
-  const message = rows[0]
+/**
+ * Sends a message.
+ *
+ * Two callers reach this: the Phase 1 route, which passes only sender and
+ * recipient, and the Phase 5 conversation route, which passes a conversation it
+ * has already checked membership of. A legacy send attaches to an existing
+ * thread for the same pair when there is one, so old and new clients do not fork a
+ * conversation into two, but it does not open one: that would mean creating a
+ * thread for a pair who have never spoken.
+ *
+ * `clientMessageId` makes a client's retry safe. Without it every retry is a new
+ * row, which is how a timed-out request ends up posted twice.
+ */
+export async function sendMessage({ senderId, recipientId, body, conversationId = null, clientMessageId = null }) {
+  const conversation = conversationId
+    ?? (await findDirectConversation(senderId, recipientId))
+
+  const message = conversation
+    ? await conversationModel.appendMessage(
+      { conversationId: conversation, senderId, recipientId, body, clientMessageId },
+    )
+    : await insertLegacyMessage({ senderId, recipientId, body })
 
   await notificationService.notify({
     userId: recipientId,
@@ -43,9 +59,32 @@ export async function sendMessage({ senderId, recipientId, body }) {
     title: 'New message',
     body: body.slice(0, 140),
     link: '/messages',
+    // The notification is raised here rather than in each caller so the legacy
+    // route, the conversations route and the websocket all tell the recipient
+    // exactly once, whichever way the message arrived. The thread id rides along
+    // so the client can jump straight to it instead of guessing from the link.
+    metadata: { conversationId: message.conversation_id ?? null },
   })
 
   return formatMessage(message, senderId)
+}
+
+/** The existing thread for a pair, or null. Does not create one. */
+async function findDirectConversation(senderId, recipientId) {
+  const { rows } = await query(
+    'SELECT id FROM conversations WHERE direct_key = $1',
+    [conversationModel.directKey(senderId, recipientId)],
+  )
+  return rows[0]?.id ?? null
+}
+
+async function insertLegacyMessage({ senderId, recipientId, body }) {
+  const { rows } = await query(
+    `INSERT INTO messages (sender_id, recipient_id, body)
+     VALUES ($1,$2,$3) RETURNING *`,
+    [senderId, recipientId, body],
+  )
+  return rows[0]
 }
 
 export function formatMessage(row, viewerId) {
@@ -53,6 +92,10 @@ export function formatMessage(row, viewerId) {
     id: row.id,
     senderId: row.sender_id,
     recipientId: row.recipient_id,
+    // The Phase 5 thread this belongs to, when there is one. A Phase 1 send to
+    // somebody who has never spoken has no conversation, and the client decides
+    // where to file it.
+    conversationId: row.conversation_id ?? null,
     body: row.body,
     createdAt: row.created_at,
     isRead: row.read_at ? true : row.sender_id === viewerId,

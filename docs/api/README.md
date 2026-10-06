@@ -242,6 +242,8 @@ accepted and returned interchangeably.
 
 ## Messages — `/api/messages`
 
+Full reference: [messaging.md](messaging.md). Realtime: [../backend/websockets.md](../backend/websockets.md).
+
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/conversations` | bearer | Conversation list with unread counts and presence |
@@ -253,9 +255,79 @@ accepted and returned interchangeably.
 Messaging requires an accepted connection unless the recipient's
 `allow_messages_from` is `everyone`. `nobody` blocks all inbound messages.
 
+These are the original Phase 1 routes and are still tested. New work should use
+`/api/conversations`, below, which is built on conversation rows rather than on
+pairs scraped out of the message table.
+
 Realtime delivery uses Socket.IO (see `server/src/sockets/`). Clients
 authenticate the handshake with the access token; presence is tracked in the
 `user_presence` table.
+
+---
+
+## Conversations — `/api/conversations`
+
+Full reference: [messaging.md](messaging.md).
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/` | bearer | The caller's threads, unread counts included |
+| GET | `/unread-count` | bearer | Unread across every thread |
+| POST | `/` | bearer | Open, or return, a thread; body `{ peerId }` |
+| GET | `/:conversationId` | bearer | One thread |
+| GET | `/:conversationId/messages` | bearer | A page of the thread; `limit`, `before` |
+| POST | `/:conversationId/messages` | bearer | Post; body `{ body, clientMessageId? }` |
+| PATCH | `/:conversationId/read` | bearer | Mark read; body `{ upTo? }` |
+| DELETE | `/messages/:messageId` | bearer | Soft-delete your own message |
+
+Opening a direct thread is idempotent: the same `peerId` always returns the same
+thread from either side, because `direct_key` — both ids, lowest first — carries a
+unique index. `clientMessageId` does the same for a send that was retried.
+
+Reading is a cursor per participant rather than a flag, so unread is "messages
+after it". The position only moves forwards, and `upTo` from another thread is a
+`404` rather than a silent no-op.
+
+---
+
+## Events — `/api/events`
+
+Full reference: [events.md](events.md).
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/` | bearer | Browse published events |
+| GET | `/mine` | bearer | Events the caller organizes |
+| GET | `/my-rsvps` | bearer | Events the caller has answered |
+| POST | `/` | bearer | Create a draft |
+| GET | `/:id` | bearer | One event, shaped for this viewer |
+| PATCH | `/:id` | organizer | Update |
+| DELETE | `/:id` | organizer | Withdraw (cancels) |
+| POST | `/:id/publish` | organizer | Draft → published |
+| POST | `/:id/cancel` | organizer | With reason `{ reason? }` |
+| POST | `/:id/complete` | organizer | Published → completed |
+| POST | `/:id/rsvp` | bearer | Answer `{ status, guestCount?, note? }` |
+| DELETE | `/:id/rsvp` | bearer | Withdraw an answer |
+| GET | `/:id/rsvps` | bearer | Who answered |
+| GET | `/:id/attendees` | organizer | The check-in roster |
+| POST | `/:id/attendees` | organizer | Add somebody by hand |
+| PATCH | `/:id/attendees/:userId` | organizer | Check in; body `{ checkedIn? }` |
+| PATCH | `/:id/attendees/:userId/notes` | organizer | Private notes |
+| DELETE | `/:id/attendees/:userId` | organizer | Remove from the roster |
+| GET | `/:id/attendees/me` | bearer | The caller's own check-in state |
+
+Statuses are `DRAFT`, `PUBLISHED`, `CANCELLED` and `COMPLETED` — lowercase in the
+database, and `in-progress`/`in progress` are accepted on input as the old
+spelling of `published`. An event must have somewhere to be: either `venue` or
+`virtualUrl`. `capacity` counts guests, so `guestCount: 2` uses three places.
+
+Requests take ISO instants; responses carry `date`, `startTime`, `endTime` and
+`timezone: "UTC"`. An event that runs past midnight has its `endTime` on the
+following day, enforced by `events_time_order_check`.
+
+Reminders for today and tomorrow, and automatic completion of an event whose day
+has passed, run on the scheduler — see
+[../backend/background-jobs.md](../backend/background-jobs.md).
 
 ---
 
@@ -341,22 +413,30 @@ posting, and to staff; everybody else gets `404`.
 
 ## Notifications — `/api/notifications`
 
+Full reference: [notifications.md](notifications.md).
+
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/` | bearer | Paginated list, filterable by `unreadOnly` and `type` |
 | GET | `/unread-count` | bearer | Unread count, optionally by `type` |
 | GET | `/preferences` | bearer | Notification preferences |
 | PATCH | `/preferences` | bearer | Update notification preferences |
+| PUT | `/preferences` | bearer | Alias of the above |
 | PATCH | `/:id/read` | bearer | Mark one notification read |
 | POST | `/read-all` | bearer | Mark all read |
+| PATCH | `/read-all` | bearer | Alias of the above |
 | DELETE | `/:id` | bearer | Delete a notification |
 
 Preferences are per type: `emailEnabled` off still leaves the in-app
-notification, and a type in `mutedTypes` suppresses both. Notifications that
-describe a state change are written inside the same transaction as that change,
-so a rollback cannot leave a notification about something that did not happen.
-Deleting a member who acted in a notification sets `actor_id` to `null` rather
-than deleting the notification.
+notification, and a type in `mutedTypes` suppresses both. `mutedTypes` is checked
+against the same vocabulary the database constraint allows, and an unknown type is
+`422`. Notifications that describe a state change are written inside the same
+transaction as that change, so a rollback cannot leave a notification about
+something that did not happen. Deleting a member who acted in a notification sets
+`actor_id` to `null` rather than deleting the notification.
+
+Each notification carries the `metadata` its creator attached — an event id, a
+conversation id — so a client can act on it without parsing `link`.
 
 ---
 
