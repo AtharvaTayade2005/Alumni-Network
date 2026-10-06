@@ -376,7 +376,7 @@ export async function changeJobStatus(user, jobId, target, note = null, context 
         ? AUDIT_ACTIONS.JOB_APPROVED
         : to.toLowerCase() === 'rejected'
           ? AUDIT_ACTIONS.JOB_REJECTED
-          : AUDIT_ACTIONS[`JOB_${to.toUpperCase()}`],
+          : AUDIT_ACTIONS[`JOB_${to.toUpperCase()}`] || AUDIT_ACTIONS.JOB_UPDATED,
     entityType: 'job',
     entityId: jobId,
     metadata: { from, to, note },
@@ -414,7 +414,7 @@ async function notifyPoster(job, posterId, decision, note) {
 /** The owner's own way to close a posting, as a named endpoint. */
 export async function closeJob(user, jobId, context = {}) {
   const job = await loadEditableJob(jobId, user)
-  if (job.status === JOB_STATUS.CLOSED) return jobModel.formatJob(job)
+  if (job.status === JOB_STATUS.CLOSED) return getJob(jobId, user)
   if (job.status !== JOB_STATUS.PUBLISHED) {
     throw conflict('Only a live posting can be closed')
   }
