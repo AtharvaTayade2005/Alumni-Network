@@ -118,6 +118,23 @@ const TEMPLATES = {
     return { html, text: stripTags(html) }
   },
   /**
+   * A published event changed while the reader was already going to it.
+   *
+   * `changes` is a list of "label: value" lines the organizer supplied, so a time
+   * or venue change arrives with the specific detail that moved rather than a
+   * generic "details changed".
+   */
+  event_updated: ({ eventTitle, eventDate, venue, changes }) => {
+    const list = Array.isArray(changes) && changes.length
+      ? `<ul>${changes.map((c) => `<li>${c}</li>`).join('')}</ul>` : ''
+    const html = layout({
+      title: 'Event updated',
+      body: `<p><strong>${eventTitle}</strong> has been updated.</p>
+             <p>${eventDate}${venue ? ` at ${venue}` : ''}</p>${list}`,
+    })
+    return { html, text: stripTags(html) }
+  },
+  /**
    * An applicant's status changed.
    *
    * `status` arrives as a readable phrase rather than a state name, because

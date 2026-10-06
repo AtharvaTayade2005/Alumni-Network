@@ -498,6 +498,141 @@ async function main() {
       ? notOnPublished.map((r) => r.indexname).join(', ')
       : 'all partial on published')
 
+  console.log('\n--- phase 5: events, notifications and conversations ---')
+  const eventStateCheck = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'events'::regclass AND conname = 'events_status_check'`)
+  const eventStates = eventStateCheck.rows[0]?.def ?? ''
+  check('event vocabulary is the four states this phase defines',
+    ['draft', 'published', 'cancelled', 'completed'].every((s) => eventStates.includes(s))
+      && !eventStates.includes("'removed'"),
+    eventStates)
+
+  const eventCols = await cols('events')
+  check('an event records who cancelled it and why',
+    ['published_at', 'cancelled_at', 'cancelled_by', 'cancelled_reason']
+      .every((c) => eventCols.has(c)),
+    ['published_at', 'cancelled_at', 'cancelled_by', 'cancelled_reason']
+      .filter((c) => !eventCols.has(c)).join(', ') || 'all present')
+
+  const attendeeCols = await cols('event_attendees')
+  check('the attendee roster has the updated_at its trigger needs',
+    attendeeCols.has('updated_at') && attendeeCols.has('checked_in_by'),
+    attendeeCols.has('updated_at') ? 'present' : 'missing')
+
+  const notificationCols = await cols('notifications')
+  check('notifications carry a dedupe key so a repeated run cannot duplicate one',
+    notificationCols.has('dedupe_key') && notificationCols.has('metadata'),
+    ['dedupe_key', 'metadata'].filter((c) => !notificationCols.has(c)).join(', ')
+    || 'all present')
+
+  const typeCheck = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'notifications'::regclass AND conname = 'notifications_type_check'`)
+  check('the event update notification type is in the vocabulary',
+    (typeCheck.rows[0]?.def ?? '').includes("'event_updated'"),
+    (typeCheck.rows[0]?.def ?? '').includes("'event_updated'")
+      ? 'event_updated allowed' : 'event_updated missing')
+
+  const ledger = await db.query(`SELECT to_regclass('public.background_jobs') AS reg`)
+  check('the background job ledger exists', ledger.rows[0].reg !== null,
+    ledger.rows[0].reg ?? 'missing')
+
+  // A reminder is the one notification that has to be safe to send twice, so the
+  // uniqueness is asserted against a real second insert rather than read out of the
+  // index definition.
+  const firstReminder = await db.query(
+    `INSERT INTO notifications (user_id, type, title, dedupe_key)
+     VALUES ($1, 'event_reminder', 'Reminder', 'reminder:probe') RETURNING id`,
+    [phase4.alumni])
+  let duplicateReminder = null
+  try {
+    await db.query(
+      `INSERT INTO notifications (user_id, type, title, dedupe_key)
+       VALUES ($1, 'event_reminder', 'Reminder again', 'reminder:probe')`,
+      [phase4.alumni])
+  } catch (e) {
+    duplicateReminder = e.message
+  }
+  check('the same dedupe key cannot produce a second notification',
+    duplicateReminder !== null, duplicateReminder ?? 'a duplicate was inserted')
+  await db.query(`DELETE FROM notifications WHERE id = $1`, [firstReminder.rows[0].id])
+
+  // Existing messages have to be reachable through a conversation after the
+  // backfill, and the pair has to be unique so a second run adds nothing.
+  const convCols = await cols('conversations')
+  const participantCols = await cols('conversation_participants')
+  check('conversations exist and are addressed by participant pair',
+    convCols.has('direct_key') && participantCols.has('last_read_at'),
+    `conversations[${[...convCols].join(',')}] participants[${[...participantCols].join(',')}]`)
+
+  const legacyMessage = await db.query(
+    `INSERT INTO messages (sender_id, recipient_id, body)
+     VALUES ($1, $2, 'Before conversations existed') RETURNING id`,
+    [phase4.alumni, phase4.student])
+  await db.query(
+    `INSERT INTO conversations (type, direct_key) VALUES ('direct', $1)
+     ON CONFLICT DO NOTHING`,
+    [[phase4.alumni, phase4.student].sort().join(':')])
+  await db.query(
+    `INSERT INTO conversation_participants (conversation_id, user_id)
+     SELECT c.id, m.member FROM conversations c
+     CROSS JOIN (VALUES ($1::uuid), ($2::uuid)) AS m(member)
+     WHERE c.direct_key = $3
+     ON CONFLICT DO NOTHING`,
+    [phase4.alumni, phase4.student,
+      [phase4.alumni, phase4.student].sort().join(':')])
+  // The backfill only claims messages whose conversation_id is NULL and only for
+  // pairs it has a conversation for, so re-running the INSERT..UPDATE half of it is
+  // how an operator repairs a message that arrived while a migration was half applied.
+  await db.query(
+    `UPDATE messages m SET conversation_id = c.id FROM conversations c
+     WHERE m.conversation_id IS NULL
+       AND c.direct_key = LEAST(m.sender_id, m.recipient_id)::text || ':'
+                         || GREATEST(m.sender_id, m.recipient_id)::text`)
+  const folded = await db.query(
+    `SELECT conversation_id FROM messages WHERE id = $1`, [legacyMessage.rows[0].id])
+  check('a pre-existing message is folded into a conversation',
+    folded.rows[0]?.conversation_id != null,
+    folded.rows[0]?.conversation_id ?? 'no conversation')
+
+  const pairs = await db.query(
+    `SELECT conversation_id, COUNT(*)::int AS members FROM conversation_participants
+     WHERE user_id IN ($1, $2) GROUP BY conversation_id`, [phase4.alumni, phase4.student])
+  check('a direct conversation has exactly two participants',
+    pairs.rows.length > 0 && pairs.rows.every((r) => r.members === 2),
+    pairs.rows.length ? pairs.rows.map((r) => `${r.members}`).join(',') : 'no conversation')
+
+  await rejects('a second conversation for the same pair is refused', `
+    INSERT INTO conversations (type, direct_key)
+    SELECT 'direct', direct_key FROM conversations
+      WHERE direct_key = '${[phase4.alumni, phase4.student].sort().join(':')}'`)
+
+  const messageCols = await cols('messages')
+  check('messages carry delivery state and a client id for safe retries',
+    ['conversation_id', 'delivered_at', 'client_message_id', 'deleted_at']
+      .every((c) => messageCols.has(c)),
+    ['conversation_id', 'delivered_at', 'client_message_id', 'deleted_at']
+      .filter((c) => !messageCols.has(c)).join(', ') || 'all present')
+
+  await rejects('an oversized message body is refused by the database', `
+    INSERT INTO messages (sender_id, recipient_id, body)
+    SELECT '${phase4.alumni}', '${phase4.student}', REPEAT('x', 5001)`)
+
+  const phase5Indexes = [
+    'idx_events_reminder_scan', 'idx_events_organizer_created',
+    'idx_rsvps_event_going', 'idx_rsvps_user_created', 'idx_event_attendees_event',
+    'idx_conversations_direct_key', 'idx_conversations_last_message',
+    'idx_participants_user', 'idx_participants_unread',
+    'idx_messages_client_id', 'idx_messages_conversation_visible',
+    'idx_message_read_status_user', 'idx_notifications_dedupe',
+    'idx_notifications_reminder_due', 'idx_background_jobs_status_started',
+  ]
+  const present5 = new Set(idx3.rows.map((r) => r.indexname))
+  const missing5 = phase5Indexes.filter((n) => !present5.has(n))
+  check(`all ${phase5Indexes.length} phase 5 indexes present`, missing5.length === 0,
+    missing5.length ? `missing: ${missing5.join(', ')}` : 'none missing')
+
   console.log('\n--- rollback then forward again ---')
   const down = await files('.down.sql', { downs: true })
   check('every phase 2 migration has a rollback companion', down.length >= 1, `${down.length} file(s)`)
@@ -531,28 +666,64 @@ async function main() {
   check('the old job vocabulary is restored by rollback',
     (restoredStates.rows[0]?.def ?? '').includes("'active'"),
     restoredStates.rows[0]?.def)
-  const restoredIndexes = new Set((await db.query(
+const restoredIndexes = new Set((await db.query(
     `SELECT indexname FROM pg_indexes WHERE schemaname = 'public'`)).rows.map((r) => r.indexname))
   check('rollback restores the partial indexes it replaced',
     ['idx_jobs_work_mode', 'idx_jobs_employment_type', 'idx_jobs_experience_level',
       'idx_jobs_deadline', 'idx_jobs_company'].every((n) => restoredIndexes.has(n)))
 
+  // The conversation machinery goes, but the messages it wrapped do not: they keep
+  // the sender/recipient pair every Phase 1 query reads, so a rollback costs the
+  // thread structure and nothing else.
+  const convGone = await db.query(
+    `SELECT to_regclass('public.conversation_participants') AS reg`)
+  check('conversation_participants dropped by rollback', convGone.rows[0].reg === null)
+  const ledgerGone = await db.query(`SELECT to_regclass('public.background_jobs') AS reg`)
+  check('the background job ledger dropped by rollback', ledgerGone.rows[0].reg === null)
+  const afterDownNotifications = await cols('notifications')
+  check('the notification dedupe key dropped by rollback',
+    !afterDownNotifications.has('dedupe_key') && !afterDownNotifications.has('metadata'))
+  const messageStillReadable = await db.query(
+    `SELECT sender_id, recipient_id, body FROM messages WHERE id = $1`,
+    [legacyMessage.rows[0].id])
+  check('a message survives the rollback as a plain pair',
+    messageStillReadable.rows[0]?.body === 'Before conversations existed',
+    messageStillReadable.rows[0]?.body ?? 'row missing')
+  const restoredEventStates = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'events'::regclass AND conname = 'events_status_check'`)
+  check('rollback restores the wider event vocabulary',
+    (restoredEventStates.rows[0]?.def ?? '').includes("'removed'"),
+    restoredEventStates.rows[0]?.def)
+
   // Only 009 is rolled back above; 001-008 are forward-only and have no .down.sql,
   // so re-applying the whole set would re-run CREATE TABLE roles and fail. Re-applying
   // just the reversible migration is what actually needs to succeed.
-  for (const reversible of ['009', '012']) {
+for (const reversible of ['009', '012', '013']) {
     try {
       await apply(db, (await files()).filter((f) => f.startsWith(reversible)))
       if (reversible === '009') {
         const back = await cols('alumni_profiles')
         check('009 re-applied cleanly after rollback', back.has('major') && back.has('profile_photo'))
-      } else {
+      } else if (reversible === '012') {
         const back4 = await cols('stored_files')
         const states4 = await db.query(
           `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
            WHERE conrelid = 'jobs'::regclass AND conname = 'jobs_status_check'`)
         check('012 re-applied cleanly after rollback',
           back4.has('storage_key') && (states4.rows[0]?.def ?? '').includes('pending_review'))
+      } else {
+        // Re-applying 013 over data that already went through it is the case a
+        // partially applied sequence actually hits, so it is checked against rows
+        // that exist rather than an empty table.
+        const back5 = await cols('conversations')
+        const refolded = await db.query(
+          `SELECT COUNT(*)::int AS orphans FROM messages WHERE conversation_id IS NULL`)
+        const events5 = await cols('events')
+        check('013 re-applied cleanly after rollback',
+          back5.has('direct_key') && refolded.rows[0].orphans === 0
+            && events5.has('cancelled_by'),
+          `orphans=${refolded.rows[0].orphans} cancelled_by=${events5.has('cancelled_by')}`)
       }
     } catch (e) {
       check(`${reversible} re-applied cleanly after rollback`, false, e.message)

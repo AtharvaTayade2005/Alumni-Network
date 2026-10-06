@@ -20,6 +20,7 @@ const EMAIL_TEMPLATES = {
   event_rsvp: 'event_rsvp',
   event_reminder: 'event_reminder',
   event_cancelled: 'event_cancelled',
+  event_updated: 'event_updated',
   job_posted: 'job_posting_decision',
   application_received: 'job_application_received',
   application_status: 'job_application_update',
@@ -44,12 +45,20 @@ const EMAIL_TEMPLATES = {
  * socket emit is not transactional, so emitting from inside a transaction would
  * tell a client about a row that a later rollback erases.
  *
+ * `dedupeKey` is the idempotency guarantee. Two calls carrying the same key
+ * produce one notification: the insert is ON CONFLICT DO NOTHING against a
+ * partial unique index, so whichever call loses the race stores nothing and is
+ * told it stored nothing. A notification with no key is written every time,
+ * which is what every Phase 1-4 notification wants — two genuinely distinct
+ * things that happen to read alike are still two notifications. A scheduler
+ * that may run twice has to pass a key, or it will send twice.
+ *
  * Preference handling is unchanged: a user with no preferences row defaults to
  * in-app on and email off, and muted types suppress both the row and the email.
  */
 export async function notify({
   userId, type, title, body = null, link = null, actorId = null,
-  email = null, emailPayload = null, db = null,
+  email = null, emailPayload = null, db = null, dedupeKey = null, metadata = null,
 }) {
   if (!userId) return null
 
@@ -66,14 +75,21 @@ export async function notify({
   let stored = null
   if (deliverInApp) {
     const { rows } = await runner.query(
-      `INSERT INTO notifications (user_id, type, title, body, link, actor_id)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [userId, type, title, body, link, actorId],
+      `INSERT INTO notifications (user_id, type, title, body, link, actor_id,
+         dedupe_key, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+       RETURNING *`,
+      [userId, type, title, body, link, actorId, dedupeKey,
+        metadata ? JSON.stringify(metadata) : null],
     )
     stored = rows[0]
+    // A lost race is not an error: the caller asked for a notification about a
+    // fact, and the fact is already on record. Returning null tells it nothing
+    // was written, so a scheduler can count what it actually delivered.
   }
 
-  if (email && pref?.email_enabled && !pref?.muted_types?.includes(type)) {
+  if (email && pref?.email_enabled && !pref?.muted_types?.includes(type) && (!dedupeKey || stored)) {
     const template = EMAIL_TEMPLATES[type]
     if (template) {
       // Each template destructures its own fields, so the caller supplies them
