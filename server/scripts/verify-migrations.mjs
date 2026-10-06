@@ -663,6 +663,107 @@ check('an event can end after midnight and can carry a picture',
   check(`all ${phase5Indexes.length} phase 5 indexes present`, missing5.length === 0,
     missing5.length ? `missing: ${missing5.join(', ')}` : 'none missing')
 
+  console.log('\n--- phase 6: donations, moderation and audit ---')
+  const donationCols = await cols('donations')
+  check('donations adopts the specification donor name',
+    donationCols.has('user_id') && !donationCols.has('donor_id'),
+    `user_id=${donationCols.has('user_id')} donor_id=${donationCols.has('donor_id')}`)
+  check('donations records the provider and the spec vocabulary',
+    donationCols.has('provider') && donationCols.has('is_anonymous')
+    && donationCols.has('message'),
+    ['provider', 'is_anonymous', 'message'].filter((c) => !donationCols.has(c)).join(', ')
+    || 'all present')
+  const donationStates = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'donations'::regclass AND conname = 'donations_status_check'`)
+  check('donation statuses are the specification set',
+    ['PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'REFUNDED']
+      .every((s) => (donationStates.rows[0]?.def ?? '').includes(s)),
+    donationStates.rows[0]?.def)
+
+  const txnCols = await cols('payment_transactions')
+  check('payments carry the specification columns',
+    ['user_id', 'transaction_id', 'provider_status', 'failure_code', 'event_id', 'metadata']
+      .every((c) => txnCols.has(c)) && !txnCols.has('provider_reference'),
+    ['user_id', 'transaction_id', 'provider_status', 'failure_code', 'event_id',
+      'metadata'].filter((c) => !txnCols.has(c)).join(', ')
+    || (txnCols.has('provider_reference') ? 'provider_reference still present' : 'all present'))
+  const txnStates = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'payment_transactions'::regclass
+       AND conname = 'transactions_status_check'`)
+  check('payment statuses are the specification set',
+    ['PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'REFUNDED']
+      .every((s) => (txnStates.rows[0]?.def ?? '').includes(s)),
+    txnStates.rows[0]?.def)
+
+  const receiptCols = await cols('donation_receipts')
+  check('receipts carry amount, currency and donor identity',
+    ['amount', 'currency', 'donor_user_id', 'donor_name', 'donor_email', 'updated_at']
+      .every((c) => receiptCols.has(c)),
+    ['amount', 'currency', 'donor_user_id', 'donor_name', 'donor_email', 'updated_at']
+      .filter((c) => !receiptCols.has(c)).join(', ') || 'all present')
+
+  // The webhook idempotency anchor: two rows for one provider event must be
+  // impossible once the event id is recorded.
+  await db.exec(`INSERT INTO donations (user_id, amount, status)
+    VALUES ('${phase4.alumni}', 25.00, 'SUCCESS')`)
+  const don1 = await db.query(`SELECT id FROM donations
+    WHERE user_id = '${phase4.alumni}' ORDER BY created_at DESC LIMIT 1`)
+  await db.exec(`INSERT INTO payment_transactions
+    (donation_id, user_id, provider, transaction_id, amount, status, event_id)
+    VALUES ('${don1.rows[0].id}', '${phase4.alumni}', 'stripe', 'pi_probe', 25.00,
+      'SUCCESS', 'evt_probe')`)
+  await rejects('a replayed webhook event cannot create a second row', `
+    INSERT INTO payment_transactions
+    (donation_id, user_id, provider, transaction_id, amount, status, event_id)
+    VALUES ('${don1.rows[0].id}', '${phase4.alumni}', 'stripe', 'pi_probe2', 25.00,
+      'SUCCESS', 'evt_probe')`)
+
+  const reportCols = await cols('reports')
+  check('reports carry the specification review fields',
+    ['description', 'reviewed_by', 'reviewed_at'].every((c) => reportCols.has(c))
+    && !['details', 'resolved_by', 'resolved_at', 'resolution']
+      .some((c) => reportCols.has(c)),
+    `description=${reportCols.has('description')} details=${reportCols.has('details')}`)
+  const reportStates = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'reports'::regclass AND conname = 'reports_status_check'`)
+  check('report statuses are the specification set',
+    ['PENDING', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED']
+      .every((s) => (reportStates.rows[0]?.def ?? '').includes(s)),
+    reportStates.rows[0]?.def)
+
+  const audit = await db.query(
+    `SELECT column_name, is_generated FROM information_schema.columns
+     WHERE table_name = 'audit_logs'
+       AND column_name IN ('target_type', 'target_id', 'timestamp')
+     ORDER BY column_name`)
+  check('audit logs expose the specification target names as generated aliases',
+    audit.rows.length === 3 && audit.rows.every((r) => r.is_generated === 'ALWAYS'),
+    audit.rows.length ? audit.rows.map((r) => `${r.column_name}=${r.is_generated}`).join(',')
+      : 'none present')
+
+  const moderation = await db.query(`SELECT to_regclass('public.content_moderation') AS reg`)
+  check('the content moderation ledger exists', moderation.rows[0].reg !== null,
+    moderation.rows[0].reg ?? 'missing')
+  await db.exec(`INSERT INTO content_moderation (target_type, target_id, actor_id, reason)
+    VALUES ('job', '${pendingJob.rows[0].id}', '${phase4.moderator}', 'spam')`)
+  await rejects('a target can only be hidden once', `
+    INSERT INTO content_moderation (target_type, target_id, actor_id, reason)
+    VALUES ('job', '${pendingJob.rows[0].id}', '${phase4.moderator}', 'again')`)
+
+  const phase6Indexes = [
+    'idx_donations_user_created', 'idx_donations_status', 'idx_donation_receipts_user',
+    'uq_payment_transactions_provider_txn', 'uq_payment_transactions_provider_event',
+    'idx_payment_transactions_user', 'idx_reports_review_queue',
+    'idx_audit_logs_action_created', 'uq_content_moderation_target',
+  ]
+  const present6 = new Set(idx3.rows.map((r) => r.indexname))
+  const missing6 = phase6Indexes.filter((n) => !present6.has(n))
+  check(`all ${phase6Indexes.length} phase 6 indexes present`, missing6.length === 0,
+    missing6.length ? `missing: ${missing6.join(', ')}` : 'none missing')
+
   console.log('\n--- rollback then forward again ---')
   const down = await files('.down.sql', { downs: true })
   check('every phase 2 migration has a rollback companion', down.length >= 1, `${down.length} file(s)`)
@@ -726,10 +827,10 @@ const restoredIndexes = new Set((await db.query(
     (restoredEventStates.rows[0]?.def ?? '').includes("'removed'"),
     restoredEventStates.rows[0]?.def)
 
-  // Only 009 is rolled back above; 001-008 are forward-only and have no .down.sql,
+// Only 009 is rolled back above; 001-008 are forward-only and have no .down.sql,
   // so re-applying the whole set would re-run CREATE TABLE roles and fail. Re-applying
   // just the reversible migration is what actually needs to succeed.
-for (const reversible of ['009', '012', '013']) {
+for (const reversible of ['009', '012', '013', '014']) {
     try {
       await apply(db, (await files()).filter((f) => f.startsWith(reversible)))
       if (reversible === '009') {
@@ -742,7 +843,7 @@ for (const reversible of ['009', '012', '013']) {
            WHERE conrelid = 'jobs'::regclass AND conname = 'jobs_status_check'`)
         check('012 re-applied cleanly after rollback',
           back4.has('storage_key') && (states4.rows[0]?.def ?? '').includes('pending_review'))
-      } else {
+      } else if (reversible === '013') {
         // Re-applying 013 over data that already went through it is the case a
         // partially applied sequence actually hits, so it is checked against rows
         // that exist rather than an empty table.
@@ -754,6 +855,18 @@ for (const reversible of ['009', '012', '013']) {
           back5.has('direct_key') && refolded.rows[0].orphans === 0
             && events5.has('cancelled_by'),
           `orphans=${refolded.rows[0].orphans} cancelled_by=${events5.has('cancelled_by')}`)
+      } else {
+        const back6 = await cols('donations')
+        const audit6 = await db.query(
+          `SELECT column_name FROM information_schema.columns
+           WHERE table_name = 'audit_logs' AND column_name = 'target_id'`)
+        const moderation6 = await db.query(
+          `SELECT to_regclass('public.content_moderation') AS reg`)
+        check('014 re-applied cleanly after rollback',
+          back6.has('user_id') && back6.has('provider')
+            && audit6.rows.length === 1 && moderation6.rows[0].reg !== null,
+          `user_id=${back6.has('user_id')} target_id=${audit6.rows.length === 1}
+            moderation=${moderation6.rows[0].reg ?? 'missing'}`)
       }
     } catch (e) {
       check(`${reversible} re-applied cleanly after rollback`, false, e.message)

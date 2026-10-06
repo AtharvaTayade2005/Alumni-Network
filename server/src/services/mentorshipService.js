@@ -1,4 +1,5 @@
 import { query, withTransaction } from '../config/database.js'
+import { AUDIT_ACTIONS } from '../constants/auditActions.js'
 import * as mentorshipModel from '../models/mentorshipModel.js'
 import * as userModel from '../models/userModel.js'
 import * as connectionService from './connectionService.js'
@@ -128,7 +129,7 @@ export async function requestMentorship(menteeId, payload, context = {}) {
 
   await auditService.record({
     actorId: menteeId,
-    action: 'mentorship.requested',
+    action: AUDIT_ACTIONS.MENTORSHIP_REQUESTED,
     entityType: 'mentorship_request',
     entityId: created.id,
     metadata: { mentorId },
@@ -213,7 +214,7 @@ export async function respondToRequest(mentorId, requestId, payload, context = {
 
   await auditService.record({
     actorId: mentorId,
-    action: `mentorship.${payload.status}`,
+    action: AUDIT_ACTIONS[`MENTORSHIP_${payload.status.toUpperCase()}`],
     entityType: 'mentorship_request',
     entityId: requestId,
     metadata: { menteeId: request.mentee_id },
@@ -270,7 +271,7 @@ export async function cancelMyRequest(userId, requestId, context = {}) {
   if (!cancelled) throw notFound('Mentorship request')
   await auditService.record({
     actorId: userId,
-    action: 'mentorship.cancelled',
+    action: AUDIT_ACTIONS.MENTORSHIP_CANCELLED,
     entityType: 'mentorship_request',
     entityId: requestId,
     context,
@@ -381,7 +382,7 @@ export async function endMentorship(userId, relationshipId, payload, context = {
 
   await auditService.record({
     actorId: userId,
-    action: 'mentorship.ended',
+    action: AUDIT_ACTIONS.MENTORSHIP_ENDED,
     entityType: 'mentorship_relationship',
     entityId: relationshipId,
     context,
@@ -435,7 +436,7 @@ export async function completeMentorship(userId, relationshipId, context = {}) {
 
   await auditService.record({
     actorId: userId,
-    action: 'mentorship.completed',
+    action: AUDIT_ACTIONS.MENTORSHIP_COMPLETED,
     entityType: 'mentorship_relationship',
     entityId: relationshipId,
     context,

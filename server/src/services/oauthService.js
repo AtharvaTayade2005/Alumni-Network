@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { AUDIT_ACTIONS } from '../constants/auditActions.js'
 import env from '../config/env.js'
 import { query } from '../config/database.js'
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../utils/errors.js'
@@ -340,7 +341,7 @@ export async function resolveCallback(provider, { code, state }, context = {}) {
     )
     await auditService.record({
       actorId: account.id,
-      action: 'auth.oauth_linked',
+      action: AUDIT_ACTIONS.AUTH_OAUTH_LINKED,
       entityType: 'user',
       entityId: account.id,
       metadata: { provider },
@@ -369,7 +370,7 @@ export async function resolveCallback(provider, { code, state }, context = {}) {
     assertSignInAllowed(existingUser)
     await auditService.record({
       actorId: existingUser.id,
-      action: 'auth.oauth_linked',
+      action: AUDIT_ACTIONS.AUTH_OAUTH_LINKED,
       entityType: 'user',
       entityId: existingUser.id,
       metadata: { provider, reason: 'email_match' },

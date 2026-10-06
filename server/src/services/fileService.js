@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { AUDIT_ACTIONS } from '../constants/auditActions.js'
 import * as fileModel from '../models/fileModel.js'
 import * as storageService from './storageService.js'
 import { getStorageDriver } from './storageService.js'
@@ -72,7 +73,7 @@ export async function uploadFile(user, file, { kind = 'resume', context = {} } =
 
   await auditService.record({
     actorId: user.id,
-    action: 'file.uploaded',
+    action: AUDIT_ACTIONS.FILE_UPLOADED,
     entityType: 'stored_file',
     entityId: row.id,
     metadata: { kind, contentType: row.content_type, byteSize: row.byte_size },
@@ -145,7 +146,7 @@ export async function deleteFile(user, fileId, context = {}) {
 
   await auditService.record({
     actorId: user.id,
-    action: 'file.deleted',
+    action: AUDIT_ACTIONS.FILE_DELETED,
     entityType: 'stored_file',
     entityId: fileId,
     // The owner is recorded because an administrator deleting somebody else's file
@@ -206,7 +207,7 @@ export async function setProfileResume(user, fileId, context = {}) {
   if (replaced && replaced !== row.id) await discardUnreferenced(replaced)
   await auditService.record({
     actorId: user.id,
-    action: 'profile.resume_set',
+    action: AUDIT_ACTIONS.PROFILE_RESUME_SET,
     entityType: 'stored_file',
     entityId: row.id,
     context,
@@ -221,7 +222,7 @@ export async function clearProfileResume(user, context = {}) {
   await discardUnreferenced(previous.id)
   await auditService.record({
     actorId: user.id,
-    action: 'profile.resume_cleared',
+    action: AUDIT_ACTIONS.PROFILE_RESUME_CLEARED,
     entityType: 'stored_file',
     entityId: previous.id,
     context,

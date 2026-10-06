@@ -23,16 +23,12 @@
 
 ---
 
-### 2. Current Project Status (Frontend-Only Phase Complete)
+### 2. Current Project Status (Frontend & Backend Integrated)
 
+- **Backend Integration**: CONNECTED. The frontend's centralized API client (`src/services/api.js`) routes directly to the live Express REST backend via `src/services/api.real.js` and `src/services/http.js` through the Vite proxy (`/api` -> `http://localhost:5000`).
 - **Role Architecture**: IMPLEMENTED (`STUDENT`, `ALUMNI`, `PROFESSOR`, `ADMIN` with centralized permissions and role-based navigation).
-- **Demo Role Switcher**: IMPLEMENTED (Instant simulation switcher in top toolbar).
-- **Mock Data Layer (`src/data/`)**: IMPLEMENTED (`users.js`, `students.js`, `alumni.js`, `professors.js`, `jobs.js`, `applications.js`, `mentorshipRequests.js`, `conversations.js`, `events.js`, `notifications.js`, `resumes.js`, `donations.js`, `announcements.js`, `analytics.js`).
-- **Mock Service Layer (`src/services/`)**: IMPLEMENTED (`auth.service.js`, `user.service.js`, `directory.service.js`, `jobs.service.js`, `mentorship.service.js`, `events.service.js`, `messaging.service.js`, `notification.service.js`, `resume.service.js`, `donation.service.js`, `announcement.service.js`, `admin.service.js`, `ai.service.js`).
-- **Student Experience**: IMPLEMENTED (Dashboard, Profile, Directory, Mentorship, Jobs, Applications, Events, Messages, Notifications, Resume with ATS Intelligence, AI Assistant).
-- **Alumni Experience**: IMPLEMENTED (Dashboard, Profile, Directory, Mentorship Requests & Mentees, Jobs & Applicant Review, Events, Donations with 80G Receipts, Messages, AI Assistant).
-- **Professor Experience**: IMPLEMENTED (Dashboard, Profile, Students Guidance Roster, Alumni Directory, Announcements, Events, Messages).
-- **Admin Experience**: IMPLEMENTED (Dashboard KPIs, User Management, Alumni Verification Queue, Job Moderation, Event Management, Donations Audit, Analytics, Immutable Security Audit Logs).
+- **Authentication**: JWT authentication with automatic CSRF token mirroring, refresh token rotation deduplication, and cookie/bearer support.
+- **REST Endpoints Connected**: `/auth`, `/profiles`, `/alumni`, `/connections`, `/conversations`, `/messages`, `/mentorship`, `/events`, `/jobs`, `/applications`, `/notifications`, `/admin`, `/files`.
 - **UI / Swiss Design System**: IMPLEMENTED & PRESERVED (Strict 1px borders, typography hierarchy, monospace accents, zero arbitrary shadows, dark/light contrast).
 
 ---

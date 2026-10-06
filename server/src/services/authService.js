@@ -1,4 +1,5 @@
 import config from '../config/env.js'
+import { AUDIT_ACTIONS } from '../constants/auditActions.js'
 import { withTransaction } from '../config/database.js'
 import * as userModel from '../models/userModel.js'
 import * as tokenModel from '../models/tokenModel.js'
@@ -107,7 +108,7 @@ export async function register(payload, context = {}) {
 
   await auditService.record({
     actorId: result,
-    action: 'user.registered',
+    action: AUDIT_ACTIONS.USER_REGISTERED,
     entityType: 'user',
     entityId: result,
     metadata: { role: payload.role },
@@ -125,7 +126,7 @@ export async function login({ email, password }, context = {}) {
 
   if (!user) {
     await auditService.record({
-      action: 'auth.login_failed',
+      action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
       entityType: 'user',
       entityId: null,
       metadata: { email, reason: 'no_such_user' },
@@ -151,7 +152,7 @@ export async function login({ email, password }, context = {}) {
     await userModel.recordFailedLogin(user.id)
     await auditService.record({
       actorId: user.id,
-      action: 'auth.login_failed',
+      action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
       entityType: 'user',
       entityId: user.id,
       metadata: { reason: 'bad_password' },
@@ -167,7 +168,7 @@ export async function login({ email, password }, context = {}) {
 
   await auditService.record({
     actorId: user.id,
-    action: 'auth.login',
+    action: AUDIT_ACTIONS.AUTH_LOGIN,
     entityType: 'user',
     entityId: user.id,
     context,
@@ -244,7 +245,7 @@ export async function logout(rawToken, context = {}) {
     if (stored) {
       await auditService.record({
         actorId: stored.user_id,
-        action: 'auth.logout',
+        action: AUDIT_ACTIONS.AUTH_LOGOUT,
         entityType: 'user',
         entityId: stored.user_id,
         context,
@@ -273,7 +274,7 @@ export async function requestPasswordReset(email, context = {}) {
   await mailService.queuePasswordResetEmail(user.email, token)
   await auditService.record({
     actorId: user.id,
-    action: 'auth.password_reset_requested',
+    action: AUDIT_ACTIONS.AUTH_PASSWORD_RESET_REQUESTED,
     entityType: 'user',
     entityId: user.id,
     context,
@@ -309,7 +310,7 @@ export async function resetPassword({ token, password }, context = {}) {
 
   await auditService.record({
     actorId: record.user_id,
-    action: 'auth.password_reset',
+    action: AUDIT_ACTIONS.AUTH_PASSWORD_RESET,
     entityType: 'user',
     entityId: record.user_id,
     context,
@@ -338,7 +339,7 @@ export async function verifyEmail(token, context = {}) {
   await userModel.setEmailVerified(record.user_id, true)
   await auditService.record({
     actorId: record.user_id,
-    action: 'auth.email_verified',
+    action: AUDIT_ACTIONS.AUTH_EMAIL_VERIFIED,
     entityType: 'user',
     entityId: record.user_id,
     context,
@@ -360,7 +361,7 @@ export async function changePassword(userId, { currentPassword, newPassword }, c
 
   await auditService.record({
     actorId: userId,
-    action: 'auth.password_changed',
+    action: AUDIT_ACTIONS.AUTH_PASSWORD_CHANGED,
     entityType: 'user',
     entityId: userId,
     context,

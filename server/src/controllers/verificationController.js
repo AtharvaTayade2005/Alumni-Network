@@ -1,4 +1,5 @@
 import * as verificationService from '../services/verificationService.js'
+import { AUDIT_ACTIONS } from '../constants/auditActions.js'
 import * as auditService from '../services/auditService.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { getQuery } from '../middleware/validate.js'
@@ -84,7 +85,7 @@ export const verify = asyncHandler(async (req, res) => {
 
   await auditService.record({
     actorId: req.user.id,
-    action: 'alumni.verify',
+    action: AUDIT_ACTIONS.ALUMNI_VERIFIED,
     entityType: 'alumni_profile',
     entityId: userId,
     metadata: { previousStatus: 'pending', newStatus: 'verified' },
@@ -109,7 +110,7 @@ export const reject = asyncHandler(async (req, res) => {
 
   await auditService.record({
     actorId: req.user.id,
-    action: 'alumni.reject',
+    action: AUDIT_ACTIONS.ALUMNI_REJECTED,
     entityType: 'alumni_profile',
     entityId: userId,
     metadata: { previousStatus: 'pending', newStatus: 'rejected', reason: req.body.reason },

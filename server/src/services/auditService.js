@@ -2,6 +2,51 @@ import { query } from '../config/database.js'
 import logger from '../utils/logger.js'
 
 /**
+ * Audit trail reader/writer.
+ *
+ * The specification names the audited target fields targetType, targetId and
+ * timestamp. The schema stores them under entity_type/entity_id/created_at and
+ * migration 014 exposes the specification names as generated aliases, so rows
+ * are read back through those aliases and shaped with the specification's
+ * casing.
+ */
+
+// Metadata is free-form, so a defensive whitelist keeps card numbers, CVVs and
+// tokens out of the audit trail even when every caller passes good data.
+const SECRET_KEY_PATTERN = /(card|cvv|number|number_last4|pan|token|secret|password|credit.?card)/i
+const SAFE_METADATA_SHUFFLE = (metadata) => {
+  if (!metadata) return null
+  if (typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const safe = {}
+  for (const [key, value] of Object.entries(metadata)) {
+    if (SECRET_KEY_PATTERN.test(key)) continue
+    if (value !== undefined) safe[key] = value
+  }
+  return safe
+}
+
+/** The wire shape of an audit row: specification fields plus actor. */
+export function formatAuditRow(row) {
+  return {
+    id: row.id,
+    action: row.action,
+    targetType: row.target_type ?? row.entity_type,
+    targetId: row.target_id ?? row.entity_id,
+    timestamp: row.timestamp ?? row.created_at,
+    metadata: row.metadata,
+    ipAddress: row.ip_address,
+    userAgent: row.user_agent,
+    actor: row.actor_id
+      ? {
+          id: row.actor_id,
+          name: row.actor_name ?? null,
+          email: row.actor_email ?? null,
+        }
+      : null,
+  }
+}
+
+/**
  * Writes an audit record. Never throws: a logging failure must not break the
  * request that triggered it, but it is logged loudly.
  */
@@ -19,7 +64,7 @@ export async function record({
         action,
         entityType,
         entityId ? String(entityId) : null,
-        metadata ? JSON.stringify(metadata) : null,
+        JSON.stringify(SAFE_METADATA_SHUFFLE(metadata)),
         context.ip ?? null,
         context.userAgent ? String(context.userAgent).slice(0, 300) : null,
       ],
@@ -37,7 +82,7 @@ export async function list({ limit, offset, action, entityType, actorId, from, t
     return `$${params.length}`
   }
 
-  if (action) conditions.push(`action ILIKE '%' || ${add(action)} || '%'`)
+  if (action) conditions.push(`action = ${add(action.toUpperCase())}`)
   if (entityType) conditions.push(`entity_type = ${add(entityType)}`)
   if (actorId) conditions.push(`actor_id = ${add(actorId)}::UUID`)
   if (from) conditions.push(`created_at >= ${add(from)}::TIMESTAMPTZ`)
@@ -49,7 +94,8 @@ export async function list({ limit, offset, action, entityType, actorId, from, t
 
   const { rows } = await query(
     `SELECT a.id, a.action, a.entity_type, a.entity_id, a.metadata,
-            a.ip_address, a.created_at, a.actor_id,
+            a.ip_address, a.user_agent, a.created_at, a.actor_id,
+            a.target_type, a.target_id, a."timestamp",
             u.first_name || ' ' || u.last_name AS actor_name,
             u.email AS actor_email
      FROM audit_logs a
@@ -66,7 +112,10 @@ export async function list({ limit, offset, action, entityType, actorId, from, t
     countParams,
   )
 
-  return { rows, total: countRows[0].total }
+  return {
+    rows: rows.map(formatAuditRow),
+    total: countRows[0].total,
+  }
 }
 
 export async function forEntity(entityType, entityId) {
@@ -77,5 +126,5 @@ export async function forEntity(entityType, entityId) {
      ORDER BY a.created_at DESC LIMIT 100`,
     [entityType, String(entityId)],
   )
-  return rows
+  return rows.map(formatAuditRow)
 }

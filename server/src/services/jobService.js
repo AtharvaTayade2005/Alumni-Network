@@ -1,4 +1,5 @@
 import * as jobModel from '../models/jobModel.js'
+import { AUDIT_ACTIONS } from '../constants/auditActions.js'
 import * as fileService from './fileService.js'
 import * as notificationService from './notificationService.js'
 import * as auditService from './auditService.js'
@@ -224,7 +225,7 @@ export async function createJob(user, payload, context = {}) {
 
   await auditService.record({
     actorId: user.id,
-    action: 'job.created',
+    action: AUDIT_ACTIONS.JOB_CREATED,
     entityType: 'job',
     entityId: jobId,
     metadata: { title: payload.title, company: payload.companyName, status },
@@ -280,7 +281,7 @@ export async function updateJob(user, jobId, payload, context = {}) {
 
   await auditService.record({
     actorId: user.id,
-    action: 'job.updated',
+    action: AUDIT_ACTIONS.JOB_UPDATED,
     entityType: 'job',
     entityId: jobId,
     metadata: { fields: Object.keys(payload) },
@@ -300,7 +301,7 @@ export async function deleteJob(user, jobId, context = {}) {
   await jobModel.deleteJob(jobId)
   await auditService.record({
     actorId: user.id,
-    action: 'job.deleted',
+    action: AUDIT_ACTIONS.JOB_DELETED,
     entityType: 'job',
     entityId: jobId,
     metadata: { title: job.title },
@@ -371,7 +372,11 @@ export async function changeJobStatus(user, jobId, target, note = null, context 
 
   await auditService.record({
     actorId: user.id,
-    action: `job.${to.toLowerCase()}`,
+    action: to.toLowerCase() === 'published'
+        ? AUDIT_ACTIONS.JOB_APPROVED
+        : to.toLowerCase() === 'rejected'
+          ? AUDIT_ACTIONS.JOB_REJECTED
+          : AUDIT_ACTIONS[`JOB_${to.toUpperCase()}`],
     entityType: 'job',
     entityId: jobId,
     metadata: { from, to, note },
@@ -417,7 +422,7 @@ export async function closeJob(user, jobId, context = {}) {
   await jobModel.setJobStatus(jobId, JOB_STATUS.CLOSED)
   await auditService.record({
     actorId: user.id,
-    action: 'job.closed',
+    action: AUDIT_ACTIONS.JOB_CLOSED,
     entityType: 'job',
     entityId: jobId,
     context,
@@ -506,7 +511,7 @@ export async function applyToJob(user, jobId, payload, context = {}) {
   })
   await auditService.record({
     actorId: user.id,
-    action: 'job.applied',
+    action: AUDIT_ACTIONS.JOB_APPLIED,
     entityType: 'job_application',
     entityId: created.id,
     metadata: { jobId },
@@ -602,7 +607,7 @@ export async function reviewApplication(user, applicationId, apiStatus, note = n
   })
   await auditService.record({
     actorId: user.id,
-    action: 'application.status_changed',
+    action: AUDIT_ACTIONS.APPLICATION_STATUS_CHANGED,
     entityType: 'job_application',
     entityId: applicationId,
     metadata: { from: application.status, to, note },
@@ -626,7 +631,7 @@ export async function withdrawApplication(user, applicationId, context = {}) {
   await jobModel.updateApplicationStatus(applicationId, APPLICATION_STATUS.WITHDRAWN)
   await auditService.record({
     actorId: user.id,
-    action: 'application.withdrawn',
+    action: AUDIT_ACTIONS.APPLICATION_WITHDRAWN,
     entityType: 'job_application',
     entityId: applicationId,
     context,
