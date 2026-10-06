@@ -1,10 +1,12 @@
 import * as profileModel from '../models/profileModel.js'
 import * as userModel from '../models/userModel.js'
 import * as connectionService from '../services/connectionService.js'
+import * as fileService from '../services/fileService.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { getQuery } from '../middleware/validate.js'
 import { sendCreated, sendSuccess } from '../utils/response.js'
-import { badRequest, notFound } from '../utils/errors.js'
+import { notFound } from '../utils/errors.js'
+import { contextOf } from '../utils/requestContext.js'
 import { emitToUsers } from '../sockets/index.js'
 
 export async function loadProfile(userId) {
@@ -137,21 +139,28 @@ export const deleteSocialLink = asyncHandler(async (req, res) => {
   sendSuccess(res, null, { message: 'Social link removed' })
 })
 
-export const uploadResume = asyncHandler(async (req, res) => {
-  if (!req.file) throw badRequest('No file uploaded')
-  if (!req.file.mimetype?.includes('word') && req.file.mimetype !== 'application/pdf') {
-    throw badRequest('Resume must be a PDF or DOCX file')
-  }
+/**
+ * The legacy profile resume endpoints.
+ *
+ * These used to write `/uploads/resumes/<userId>/<filename>` into
+ * student_profiles.resume_url and nothing ever served that path, so a member could
+ * upload a resume, see it "saved", and have no way to hand it to anybody. They now go
+ * through the file service: the bytes are stored, the file id is recorded on the
+ * profile, and reading the file is a permission check like any other.
+ */
 
-  const url = `/uploads/resumes/${req.user.id}/${req.file.filename}`
-  const result = await profileModel.setStudentResume(req.user.id, {
-    url,
-    filename: req.file.originalname,
-  })
-  sendSuccess(res, result, { message: 'Resume uploaded' })
+export const uploadResume = asyncHandler(async (req, res) => {
+  const stored = await fileService.uploadFile(req.user, req.file, { context: contextOf(req) })
+  const resume = await fileService.setProfileResume(req.user, stored.id, contextOf(req))
+  sendSuccess(res, resume, { message: 'Resume uploaded' })
+})
+
+export const getResume = asyncHandler(async (req, res) => {
+  const resume = await fileService.getProfileResume(req.user)
+  sendSuccess(res, resume, { message: resume ? 'Resume retrieved' : 'No resume uploaded' })
 })
 
 export const deleteResume = asyncHandler(async (req, res) => {
-  const result = await profileModel.setStudentResume(req.user.id, { url: null, filename: null })
-  sendSuccess(res, result, { message: 'Resume removed' })
+  const removed = await fileService.clearProfileResume(req.user, contextOf(req))
+  sendSuccess(res, removed, { message: 'Resume removed' })
 })

@@ -909,7 +909,7 @@ describe('jobs', () => {
     + 'mentor junior engineers across the team.'
 
   let poster, posterToken, applicant, applicantToken, student, studentToken
-  let jobId
+  let moderator, moderatorToken, jobId
 
   before(async () => {
     poster = await createUser({ email: `poster.${uniq()}@example.edu` })
@@ -918,6 +918,8 @@ describe('jobs', () => {
     applicantToken = await loginAs(applicant)
     student = await createUser({ role: 'STUDENT', email: `stud.${uniq()}@example.edu` })
     studentToken = await loginAs(student)
+    moderator = await createUser({ role: 'MODERATOR', email: `staff.${uniq()}@example.edu` })
+    moderatorToken = await loginAs(moderator)
   })
 
   it('lets alumni post a job and reuses the company row', async () => {
@@ -939,10 +941,11 @@ describe('jobs', () => {
         experienceLevel: 'senior',
         applicationUrl: 'https://northwind.example.com/apply',
         skills: ['Node.js', 'PostgreSQL'],
-        status: 'active',
       })
     assert.equal(res.status, 201, JSON.stringify(res.body))
-    assert.equal(res.body.data.status, 'active')
+    // No status asked for, so the posting enters review. Publishing is somebody else's
+    // decision.
+    assert.equal(res.body.data.status, 'PENDING_REVIEW')
     assert.equal(res.body.data.companyName, 'Northwind Labs')
     assert.equal(res.body.data.postedBy.id, poster.id)
     assert.ok(res.body.data.companyId, 'the company should be resolved')
@@ -961,7 +964,6 @@ describe('jobs', () => {
         workMode: 'hybrid',
         employmentType: 'full_time',
         experienceLevel: 'mid',
-        status: 'active',
       })
     assert.equal(again.status, 201, JSON.stringify(again.body))
     assert.equal(again.body.data.companyId, res.body.data.companyId)
@@ -1018,6 +1020,79 @@ describe('jobs', () => {
 
     const afterCount = await query('SELECT COUNT(*)::int AS c FROM jobs')
     assert.equal(afterCount.rows[0].c, before.rows[0].c)
+  })
+
+  it('holds an alumnus posting out of the board until it is reviewed', async () => {
+    const board = await request(app).get('/api/jobs').set(asAuth(applicantToken))
+    assert.equal(board.body.meta.total, 0, 'a posting in review is not public')
+
+    const stranger = await request(app)
+      .get(`/api/jobs/${jobId}`).set(asAuth(applicantToken))
+    assert.equal(stranger.status, 404, JSON.stringify(stranger.body))
+
+    // A poster can see their own posting in review, and staff can see the queue.
+    const own = await request(app).get(`/api/jobs/${jobId}`).set(asAuth(posterToken))
+    assert.equal(own.status, 200)
+    assert.equal(own.body.data.status, 'PENDING_REVIEW')
+
+    const queue = await request(app)
+      .get('/api/jobs?status=PENDING_REVIEW').set(asAuth(moderatorToken))
+    assert.equal(queue.status, 200, JSON.stringify(queue.body))
+    assert.equal(queue.body.meta.total, 1)
+
+    // A status filter is refused for a reader rather than quietly answered with the
+    // public board.
+    const peek = await request(app)
+      .get('/api/jobs?status=PENDING_REVIEW').set(asAuth(applicantToken))
+    assert.equal(peek.status, 403, JSON.stringify(peek.body))
+  })
+
+  it('refuses to let a poster publish their own posting', async () => {
+    const selfPublish = await request(app)
+      .patch(`/api/jobs/${jobId}/status`)
+      .set(asAuth(posterToken))
+      .send({ status: 'PUBLISHED' })
+    assert.equal(selfPublish.status, 403, JSON.stringify(selfPublish.body))
+
+    const atCreate = await request(app)
+      .post('/api/jobs')
+      .set(asAuth(posterToken))
+      .send({
+        title: 'Sneaky Live Posting',
+        companyName: 'Northwind Labs',
+        description: longDescription,
+        status: 'published',
+      })
+    assert.equal(atCreate.status, 403, JSON.stringify(atCreate.body))
+
+    // The spelling the old API used for a live posting is refused the same way rather
+    // than quietly demoted, so a client built against it finds out instead of assuming
+    // its posting went live.
+    const legacySpelling = await request(app)
+      .post('/api/jobs')
+      .set(asAuth(posterToken))
+      .send({
+        title: 'Legacy Live Posting',
+        companyName: 'Northwind Labs',
+        description: longDescription,
+        status: 'active',
+      })
+    assert.equal(legacySpelling.status, 403, JSON.stringify(legacySpelling.body))
+  })
+
+  it('publishes on a moderator decision and tells the poster', async () => {
+    const published = await request(app)
+      .patch(`/api/jobs/${jobId}/status`)
+      .set(asAuth(moderatorToken))
+      .send({ status: 'published' })
+    assert.equal(published.status, 200, JSON.stringify(published.body))
+    assert.equal(published.body.data.status, 'PUBLISHED')
+
+    const feed = await request(app).get('/api/notifications').set(asAuth(posterToken))
+    assert.ok(
+      feed.body.data.some((n) => n.type === 'job_moderated'),
+      'the poster should hear about the decision on their posting',
+    )
   })
 
   it('lists and filters the board', async () => {
@@ -1077,7 +1152,7 @@ describe('jobs', () => {
         resumeUrl: 'https://example.com/resume.pdf',
       })
     assert.equal(res.status, 201, JSON.stringify(res.body))
-    assert.equal(res.body.data.status, 'submitted')
+    assert.equal(res.body.data.status, 'SUBMITTED')
     assert.equal(res.body.data.jobTitle, 'Senior Backend Engineer')
 
     const dup = await request(app)
@@ -1117,7 +1192,7 @@ describe('jobs', () => {
       .set(asAuth(applicantToken))
     assert.equal(mine.status, 200, JSON.stringify(mine.body))
     const application = mine.body.data[0]
-    assert.equal(application.status, 'submitted')
+    assert.equal(application.status, 'SUBMITTED')
     assert.equal(application.jobId, jobId)
 
     const list = await request(app)
@@ -1132,7 +1207,7 @@ describe('jobs', () => {
       .set(asAuth(posterToken))
       .send({ status: 'shortlisted' })
     assert.equal(review.status, 200, JSON.stringify(review.body))
-    assert.equal(review.body.data.status, 'shortlisted')
+    assert.equal(review.body.data.status, 'SHORTLISTED')
 
     const feed = await request(app)
       .get('/api/notifications')
@@ -1217,9 +1292,6 @@ describe('jobs', () => {
   })
 
   it('lets only staff moderate', async () => {
-    const staff = await createUser({ role: 'MODERATOR', email: `staff.${uniq()}@example.edu` })
-    const staffToken = await loginAs(staff)
-
     const asMember = await request(app)
       .patch(`/api/jobs/${jobId}/moderate`)
       .set(asAuth(applicantToken))
@@ -1228,28 +1300,91 @@ describe('jobs', () => {
 
     const removed = await request(app)
       .patch(`/api/jobs/${jobId}/moderate`)
-      .set(asAuth(staffToken))
+      .set(asAuth(moderatorToken))
       .send({ action: 'remove' })
     assert.equal(removed.status, 200, JSON.stringify(removed.body))
-    assert.equal(removed.body.data.status, 'removed')
+    assert.equal(removed.body.data.status, 'REJECTED')
 
-    // A removed posting is no longer reachable by the public.
+    // A rejected posting is no longer reachable by the public.
     const hidden = await request(app)
       .get(`/api/jobs/${jobId}`).set(asAuth(applicantToken))
     assert.equal(hidden.status, 404)
 
+    // Rejection is not a dead end: the poster may revise and resubmit, and only staff
+    // may approve it a second time.
+    const resubmitted = await request(app)
+      .patch(`/api/jobs/${jobId}/status`)
+      .set(asAuth(posterToken))
+      .send({ status: 'pending-review' })
+    assert.equal(resubmitted.status, 200, JSON.stringify(resubmitted.body))
+    assert.equal(resubmitted.body.data.status, 'PENDING_REVIEW')
+
+    const illegal = await request(app)
+      .patch(`/api/jobs/${jobId}/status`)
+      .set(asAuth(moderatorToken))
+      .send({ status: 'CLOSED' })
+    assert.equal(illegal.status, 409, JSON.stringify(illegal.body))
+
     const restored = await request(app)
       .patch(`/api/jobs/${jobId}/moderate`)
-      .set(asAuth(staffToken))
+      .set(asAuth(moderatorToken))
       .send({ action: 'approve' })
     assert.equal(restored.status, 200, JSON.stringify(restored.body))
-    assert.equal(restored.body.data.status, 'active')
+    assert.equal(restored.body.data.status, 'PUBLISHED')
+  })
+
+  it('closes a posting for its poster and stops accepting applications', async () => {
+    const closed = await request(app)
+      .patch(`/api/jobs/${jobId}/close`)
+      .set(asAuth(posterToken))
+      .send({})
+    assert.equal(closed.status, 200, JSON.stringify(closed.body))
+    assert.equal(closed.body.data.status, 'CLOSED')
+
+    // Closing twice is not an error; the posting is already where it needs to be.
+    const again = await request(app)
+      .patch(`/api/jobs/${jobId}/close`)
+      .set(asAuth(posterToken))
+      .send({})
+    assert.equal(again.status, 200, JSON.stringify(again.body))
+
+    const offBoard = await request(app).get('/api/jobs').set(asAuth(applicantToken))
+    assert.equal(offBoard.body.meta.total, 0)
+
+    const stranger = await createUser({ email: `late.${uniq()}@example.edu` })
+    const late = await request(app)
+      .post(`/api/jobs/${jobId}/applications`)
+      .set(asAuth(await loginAs(stranger)))
+      .send({ resumeUrl: 'https://example.com/resume.pdf' })
+    // Closed is not public, so a stranger is told the posting is not there rather than
+    // that it exists and has stopped accepting applications.
+    assert.equal(late.status, 404, JSON.stringify(late.body))
   })
 
   it('lists companies and their open roles', async () => {
+    // A company of its own, so the count does not depend on what earlier tests left
+    // behind on the board.
+    const posting = await request(app)
+      .post('/api/jobs')
+      .set(asAuth(posterToken))
+      .send({
+        title: 'Data Analyst',
+        companyName: 'Cedar Health',
+        description: longDescription,
+        workMode: 'onsite',
+        employmentType: 'full_time',
+        experienceLevel: 'mid',
+      })
+    assert.equal(posting.status, 201, JSON.stringify(posting.body))
+    const approved = await request(app)
+      .patch(`/api/jobs/${posting.body.data.id}/status`)
+      .set(asAuth(moderatorToken))
+      .send({ status: 'PUBLISHED' })
+    assert.equal(approved.status, 200, JSON.stringify(approved.body))
+
     const res = await request(app).get('/api/jobs/companies').set(asAuth(applicantToken))
     assert.equal(res.status, 200, JSON.stringify(res.body))
-    const company = res.body.data.find((c) => c.name === 'Northwind Labs')
+    const company = res.body.data.find((c) => c.name === 'Cedar Health')
     assert.ok(company, 'the posted company should be listed')
     assert.equal(company.openJobCount, 1)
 
@@ -1257,7 +1392,7 @@ describe('jobs', () => {
       .get(`/api/jobs/companies/${company.id}`).set(asAuth(applicantToken))
     assert.equal(detail.status, 200, JSON.stringify(detail.body))
     assert.equal(detail.body.data.jobs.length, 1)
-    assert.equal(detail.body.data.jobs[0].id, jobId)
+    assert.equal(detail.body.data.jobs[0].id, posting.body.data.id)
   })
 
   it('rejects a bad company id instead of crashing', async () => {

@@ -40,6 +40,7 @@ router.post(
   '/me/resume',
   uploadLimiter, wrapUpload(uploadResume), controller.uploadResume,
 )
+router.get('/me/resume', controller.getResume)
 router.delete('/me/resume', controller.deleteResume)
 
 // Other users' profiles

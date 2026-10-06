@@ -30,10 +30,11 @@ no companion, so it never leaves the schema half-rolled-back. Use
 `-- --steps=N` to roll back more than one.
 
 Migrations 001–007 predate the convention and are forward-only; rebuild those
-with `npm run db:reset`. New migrations should ship a companion. Migration 011 has
-one: rolling it back folds `completed` requests and notifications into their
-pre-011 forms rather than refusing to run, so the rollback succeeds on data that
-has already used the new values.
+with `npm run db:reset`. New migrations should ship a companion. Migrations 011
+and 012 have one: rolling back folds `completed` requests, and then the job
+vocabulary, notifications and the stored-file references, into their pre-phase
+forms rather than refusing to run, so the rollback succeeds on data that has
+already used the new values.
 
 `database/migrations/README.md` documents the file-naming rules.
 
@@ -355,6 +356,132 @@ As created by 001 it keyed on `is_open_to_mentor` alone, so every advertising
 alumnus still had to be filtered by `verification_status` one row at a time,
 which is exactly what the mentor query does. `graduation_year DESC` is that
 query's ordering column.
+
+## Phase 4 tables
+
+Migration 012 is `012_jobs_portal.sql`. Jobs and applications already existed
+from migrations 006 and 007; this migration replaced their vocabulary, added the
+moderation trail, and introduced stored files.
+
+### The status vocabulary is replaced, not added to
+
+`jobs.status` was `active`/`hidden`/`removed`; it is now
+
+| New | Was |
+| --- | --- |
+| `published` | `active` |
+| `rejected` | `hidden`, `removed` |
+| `pending_review`, `draft`, `closed` | — |
+
+`jobs_status_check` is dropped **before** the rows are renamed rather than
+after: `pending_review` and `rejected` are not in the old vocabulary, so the old
+check would reject exactly the rows it is about to be replaced for. A window with
+no check exists for those statements only, and the constraint is restored before
+anything else in the file runs.
+
+`published_at` is backfilled from `updated_at` for rows that were live, dated
+from the moment they stopped being a draft rather than from today, and cleared
+on every row that is not `published`.
+
+### The moderation trail
+
+`jobs` gains `published_at`, `moderated_by`, `moderated_at`, `moderation_note`
+and a denormalised `industry`. The industry is copied onto the posting because
+companies can be renamed or merged, and the board filter must not change meaning
+underneath a member because of it.
+
+`trg_job_status_requires_moderation` enforces the workflow in the database, so
+the review cannot be bypassed by a direct `UPDATE`:
+
+- An edit that leaves `status`, `moderated_by` and `moderated_at` untouched is a
+  content edit and is let through. This matters for rows migrated from the older
+  schema, which have no attribution to begin with and never will; demanding one
+  would make them uneditable.
+- Anything touching those three is a decision, and `published`, `rejected` and
+  `closed` all require `moderated_by` and `moderated_at` to be named.
+- `moderated_by` must be a moderator or an administrator. A poster cannot
+  attribute a decision to themselves.
+- `draft` and `pending_review` clear `published_at` and leave the moderation
+  columns alone, so a rejected posting that is resubmitted keeps the record of
+  the earlier decision.
+- `rejected` clears `published_at`; `closed` keeps it, because it was published
+  and the trail is still the answer to "why did this disappear from the board?".
+
+`trg_job_poster_may_post` refuses a posting owned by an account that is a student
+and nothing else. Students browse and apply; employers post.
+
+### stored_files
+
+| Column | Notes |
+| --- | --- |
+| `owner_id` | Uploader; cascades with the user |
+| `kind` | `resume` or `attachment` |
+| `storage_driver`, `storage_key` | Which driver holds it, and under what name |
+| `original_filename` | Display only; never used to build a path |
+| `content_type`, `byte_size` | As detected, not as declared |
+| `checksum_sha256` | Re-verified on download |
+
+`storage_key` is unique, and `stored_files_filename_safe` refuses a display name
+carrying a separator or `..`. The name is never used to build a path, but it is
+echoed in download headers, so it must not be able to carry a separator into one.
+The check uses `strpos` rather than `LIKE` so no escape-character handling is
+involved, and `chr(92)` for the backslash so the check cannot be broken by string
+escaping.
+
+Applications and profiles point at a file with `ON DELETE SET NULL`: deleting a
+file must not delete the application that references it.
+
+### Application review attribution
+
+`job_applications` gains `resume_file_id`, `status_note`, `reviewed_at` and
+`reviewed_by`, and `applications_status_check` now states the whole vocabulary —
+`submitted`, `under_review`, `shortlisted`, `rejected`, `accepted`, `withdrawn` —
+rather than a delta from the old one.
+
+`trg_application_review_is_attributed` requires `reviewed_by` when an
+application moves into a state a reviewer chose (`under_review`, `shortlisted`,
+`accepted`, `rejected`). Moving it to `submitted` or `withdrawn` is not a review
+and needs none. Without this an application could sit in `accepted` with nobody
+accountable for the decision.
+
+`applications_has_attachment` still holds: an application must carry a resume
+file, a resume URL or an external application URL.
+
+### Phase 4 indexes
+
+Every board index is partial on `status = 'published'`, because the board always
+reads published rows. The indexes from 006 and 007 were built the same way but
+against the old vocabulary, so after the rename they matched nothing; they are
+dropped and recreated here.
+
+| Index | Supports |
+| --- | --- |
+| `idx_jobs_published_deadline` | `deadline` filter and `openOnly` |
+| `idx_jobs_published_work_mode` | `workMode`, and the default ordering |
+| `idx_jobs_published_employment` | `employmentType` |
+| `idx_jobs_published_experience` | `experienceLevel` |
+| `idx_jobs_published_location` | `location`, on `LOWER(location)` |
+| `idx_jobs_published_industry` | `industry`, on `LOWER(industry)` |
+| `idx_jobs_published_company` | Company name filter |
+| `idx_jobs_published_company_id` | Company detail page |
+| `idx_jobs_published_salary` | `sort=salary`, on a nullable column |
+| `idx_jobs_poster_created` | "My postings", across every state |
+| `idx_jobs_review_queue` | The moderation queue (partial: `pending_review`) |
+| `idx_applications_job_status` | A poster's inbox for one posting |
+| `idx_applications_applicant_status` | The applicant's own history |
+| `idx_applications_resume_file` | "Is this file already attached?" |
+| `idx_saved_jobs_user_created` | The saved list |
+| `idx_saved_jobs_job` | The unique-pair lookup behind saving twice |
+| `idx_stored_files_owner_kind` | The caller's uploads |
+| `idx_student_profiles_resume_file` | The profile resume (partial: not null) |
+
+`idx_jobs_poster_created` is deliberately **not** partial: "my postings" and the
+review queue both read one creator's rows across every state, and a predicate
+would leave the queue unserved.
+
+Location and industry are indexed on `LOWER(...)` because the filters compare
+lowercased text, so `Lahore` and `lahore` select the same rows regardless of how
+they were typed.
 
 ## Indexes
 

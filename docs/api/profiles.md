@@ -186,6 +186,36 @@ Object storage is not configured. The service is a driver interface
 (`put`/`remove`/`read`) with a local filesystem implementation, so adding S3 later
 is a driver change rather than a change to every call site.
 
+## Resume
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/api/profiles/me/resume` | `multipart/form-data`, field name `file` |
+| `GET` | `/api/profiles/me/resume` | Metadata and the download path |
+| `DELETE` | `/api/profiles/me/resume` | Removes the stored file |
+
+Accepted: PDF, DOC and DOCX, up to 5MB. Full rules in
+[file storage](../backend/file-storage.md) — including why a zip renamed to
+`.docx` is refused, and why the download is always an attachment.
+
+A resume is exposed on a profile as an object rather than as a stored column:
+
+```json
+"resume": {
+  "id": "…",
+  "filename": "cv.pdf",
+  "downloadPath": "/api/files/…/download"
+}
+```
+
+`downloadPath` grants nothing on its own. Reading it re-checks permission per
+request and answers `404` to anybody else, so the path tells a client where to
+ask without telling a stranger that the file exists. It appears on your own
+profile, and on somebody else's only when they have made their profile visible.
+
+Uploading a replacement removes the previous file's bytes in the same step, so
+replacing a resume does not leave the old one behind.
+
 ## Verification
 
 | Method | Path | Notes |

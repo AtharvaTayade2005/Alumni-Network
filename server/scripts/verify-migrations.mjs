@@ -321,6 +321,183 @@ async function main() {
     && /is_open_to_mentor = true/.test(mentorIndex?.indexdef ?? ''),
     mentorIndex?.indexdef)
 
+  console.log('\n--- phase 4: job portal schema ---')
+  // The job portal is the only feature whose states are rewritten by a migration
+  // rather than added to, so the vocabulary is asserted from the constraint
+  // definition instead of by round-tripping values.
+  const jobStatusCheck = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'jobs'::regclass AND conname = 'jobs_status_check'`)
+  const jobStates = jobStatusCheck.rows[0]?.def ?? ''
+  check('jobs status vocabulary is the phase 4 workflow',
+    ['draft', 'pending_review', 'published', 'closed', 'rejected']
+      .every((s) => jobStates.includes(s)) && !jobStates.includes("'active'"),
+    jobStates)
+
+  const appStatusCheck = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'job_applications'::regclass
+       AND conname = 'applications_status_check'`)
+  check('application pipeline plus withdrawn is retained',
+    ['submitted', 'under_review', 'shortlisted', 'rejected', 'accepted', 'withdrawn']
+      .every((s) => (appStatusCheck.rows[0]?.def ?? '').includes(s)),
+    appStatusCheck.rows[0]?.def)
+
+  const jobCols = await cols('jobs')
+  check('jobs records who moderated it and when',
+    ['published_at', 'moderated_by', 'moderated_at', 'industry']
+      .every((c) => jobCols.has(c)),
+    ['published_at', 'moderated_by', 'moderated_at', 'industry']
+      .filter((c) => !jobCols.has(c)).join(', ') || 'all present')
+
+  const fileCols = await cols('stored_files')
+  check('stored_files holds ownership, key, type, size and checksum',
+    ['owner_id', 'kind', 'storage_key', 'original_filename', 'content_type',
+      'byte_size', 'checksum_sha256'].every((c) => fileCols.has(c)),
+    ['owner_id', 'kind', 'storage_key', 'original_filename', 'content_type',
+      'byte_size', 'checksum_sha256'].filter((c) => !fileCols.has(c)).join(', ')
+    || 'all present')
+
+  const profileCols = await cols('student_profiles')
+  check('a profile resume records the file id rather than an unserved url',
+    profileCols.has('resume_file_id'), profileCols.has('resume_file_id')
+      ? 'resume_file_id present' : 'resume_file_id missing')
+
+  // Roles drive both job triggers, and the earlier sections left their fixtures
+  // roleless, so the moderation checks get their own members.
+  await db.exec(`INSERT INTO roles (name) VALUES ('ADMIN'), ('MODERATOR'),
+      ('ALUMNI'), ('STUDENT') ON CONFLICT DO NOTHING`)
+  const roleIds = {}
+  for (const [name, id] of [['admin', 'aa000000-0000-0000-0000-000000000001'],
+    ['moderator', 'aa000000-0000-0000-0000-000000000002'],
+    ['alumni', 'aa000000-0000-0000-0000-000000000003'],
+    ['student', 'aa000000-0000-0000-0000-000000000004']]) {
+    await db.exec(`INSERT INTO users (id,email,password_hash,first_name,last_name)
+      VALUES ('${id}','phase4-${name}@example.edu','x','Phase4','${name}')
+      ON CONFLICT (id) DO NOTHING`)
+    const r = await db.query(`SELECT id FROM roles WHERE LOWER(name) = $1`, [name])
+    roleIds[name] = r.rows[0].id
+    await db.exec(`INSERT INTO user_roles (user_id, role_id)
+      VALUES ('${id}', ${roleIds[name]}) ON CONFLICT DO NOTHING`)
+  }
+  const phase4 = {
+    admin: 'aa000000-0000-0000-0000-000000000001',
+    moderator: 'aa000000-0000-0000-0000-000000000002',
+    alumni: 'aa000000-0000-0000-0000-000000000003',
+    student: 'aa000000-0000-0000-0000-000000000004',
+  }
+
+  await rejects('a student account cannot post a job', `
+    INSERT INTO jobs (posted_by, company_name, title, description, status)
+    VALUES ('${phase4.student}', 'Acme', 'Intern', 'A description.', 'pending_review')`)
+
+  const pendingJob = await db.query(
+    `INSERT INTO jobs (posted_by, company_name, title, description, status)
+     VALUES ('${phase4.alumni}', 'Acme', 'Engineer', 'A description.', 'pending_review')
+     RETURNING id, published_at, moderated_by`)
+  check('an alumni posting enters review with nothing claiming it is live',
+    !!pendingJob.rows[0]?.id && pendingJob.rows[0].published_at === null
+    && pendingJob.rows[0].moderated_by === null)
+
+  await rejects('a poster cannot promote their own posting', `
+    UPDATE jobs SET status = 'published' WHERE id = '${pendingJob.rows[0].id}'`)
+
+  const approved = await db.query(
+    `UPDATE jobs SET status = 'published', moderated_by = $2, moderated_at = NOW()
+     WHERE id = $1 RETURNING published_at, is_moderated`,
+    [pendingJob.rows[0].id, phase4.moderator])
+  check('a moderator approval publishes the posting and dates it',
+    approved.rows[0]?.published_at !== null)
+
+  await rejects('a non-moderator cannot be recorded as the deciding reviewer', `
+    UPDATE jobs SET moderated_by = '${phase4.alumni}' WHERE id = '${pendingJob.rows[0].id}'`)
+
+  await db.exec(`UPDATE jobs SET status = 'closed' WHERE id = '${pendingJob.rows[0].id}'`)
+  const closed = await db.query(
+    `SELECT published_at, moderated_by FROM jobs WHERE id = $1`, [pendingJob.rows[0].id])
+  check('closing a published posting keeps its moderation trail',
+    closed.rows[0]?.published_at !== null
+    && closed.rows[0]?.moderated_by === phase4.moderator)
+
+  await rejects('an unknown job status is refused', `
+    UPDATE jobs SET status = 'live' WHERE id = '${pendingJob.rows[0].id}'`)
+
+  const resumeFile = await db.query(
+    `INSERT INTO stored_files (owner_id, kind, storage_key, original_filename,
+        content_type, byte_size, checksum_sha256)
+     VALUES ('${phase4.student}','resume','resumes/phase4.pdf','My CV.pdf',
+        'application/pdf',1024,'${'a'.repeat(64)}')
+     RETURNING id`)
+  check('a resume file row is accepted', !!resumeFile.rows[0]?.id)
+  await rejects('a path-like display name is refused', `
+    INSERT INTO stored_files (owner_id, kind, storage_key, original_filename,
+        content_type, byte_size, checksum_sha256)
+    VALUES ('${phase4.student}','resume','resumes/evil.pdf','../../etc/passwd',
+      'application/pdf',10,'${'b'.repeat(64)}')`)
+  await rejects('a duplicate storage key is refused', `
+    INSERT INTO stored_files (owner_id, kind, storage_key, original_filename,
+        content_type, byte_size, checksum_sha256)
+    VALUES ('${phase4.student}','resume','resumes/phase4.pdf','Copy.pdf',
+      'application/pdf',10,'${'c'.repeat(64)}')`)
+
+  await db.exec(`UPDATE jobs SET status = 'published', moderated_by = '${phase4.moderator}',
+      moderated_at = NOW() WHERE id = '${pendingJob.rows[0].id}'`)
+  const application = await db.query(
+    `INSERT INTO job_applications (job_id, applicant_id, resume_file_id)
+     VALUES ($1,$2,$3) RETURNING id`, [pendingJob.rows[0].id, phase4.student, resumeFile.rows[0].id])
+  check('an application may attach an uploaded file', !!application.rows[0]?.id)
+  await rejects('an application with no attachment at all is refused', `
+    INSERT INTO job_applications (job_id, applicant_id)
+    VALUES ('${pendingJob.rows[0].id}', '${phase4.admin}')`)
+  await rejects('a review move without a reviewer is refused', `
+    UPDATE job_applications SET status = 'shortlisted' WHERE id = '${application.rows[0].id}'`)
+  const reviewed = await db.query(
+    `UPDATE job_applications SET status = 'shortlisted', reviewed_by = $2
+     WHERE id = $1 RETURNING reviewed_at`, [application.rows[0].id, phase4.alumni])
+  check('a review move records who reviewed and when', reviewed.rows[0]?.reviewed_at !== null)
+  await rejects('an unknown application status is refused', `
+    UPDATE job_applications SET status = 'hired' WHERE id = '${application.rows[0].id}'`)
+
+  const phase4Indexes = [
+    'idx_jobs_published_deadline', 'idx_jobs_published_work_mode',
+    'idx_jobs_published_employment', 'idx_jobs_published_experience',
+    'idx_jobs_published_location', 'idx_jobs_published_industry',
+    'idx_jobs_published_company', 'idx_jobs_published_company_id',
+    'idx_jobs_published_salary', 'idx_jobs_poster_created', 'idx_jobs_review_queue',
+    'idx_applications_job_status', 'idx_applications_applicant_status',
+    'idx_applications_resume_file', 'idx_saved_jobs_user_created', 'idx_saved_jobs_job',
+    'idx_stored_files_owner_kind',
+  ]
+  const present4 = new Set(idx3.rows.map((r) => r.indexname))
+  const missing4 = phase4Indexes.filter((n) => !present4.has(n))
+  check(`all ${phase4Indexes.length} phase 4 indexes present`, missing4.length === 0,
+    missing4.length ? `missing: ${missing4.join(', ')}` : 'none missing')
+
+  // Migration 006 and 007 built their partial job indexes against a state name the
+  // schema never used, which left them matching no rows at all. 012 recreates them
+  // against 'published'; leaving the dead ones in place would keep every posting
+  // write paying for an index that can never be used.
+  const retired = ['idx_jobs_work_mode', 'idx_jobs_employment_type',
+    'idx_jobs_experience_level', 'idx_jobs_deadline']
+  const stillPartialOnOldState = []
+  for (const name of retired) {
+    const def = idx3.rows.find((r) => r.indexname === name)?.indexdef ?? ''
+    if (def.includes("status = 'active'")) stillPartialOnOldState.push(name)
+  }
+  check('no job index is still partial on the retired active state',
+    stillPartialOnOldState.length === 0,
+    stillPartialOnOldState.length ? `still partial: ${stillPartialOnOldState.join(', ')}` : 'none')
+
+  const partial4 = await db.query(
+    `SELECT indexname, indexdef FROM pg_indexes
+     WHERE schemaname = 'public' AND indexname LIKE 'idx\\_jobs\\_published%'`)
+  const notOnPublished = partial4.rows.filter((r) => !r.indexdef.includes('published'))
+  check(`the ${partial4.rows.length} board indexes are partial on the published state`,
+    partial4.rows.length > 0 && notOnPublished.length === 0,
+    notOnPublished.length
+      ? notOnPublished.map((r) => r.indexname).join(', ')
+      : 'all partial on published')
+
   console.log('\n--- rollback then forward again ---')
   const down = await files('.down.sql', { downs: true })
   check('every phase 2 migration has a rollback companion', down.length >= 1, `${down.length} file(s)`)
@@ -340,16 +517,46 @@ async function main() {
   const evtGone = await db.query(
     `SELECT to_regclass('public.alumni_verification_events') AS reg`)
   check('alumni_verification_events dropped by rollback', evtGone.rows[0].reg === null)
+  const filesGone = await db.query(
+    `SELECT to_regclass('public.stored_files') AS reg`)
+  check('stored_files dropped by rollback', filesGone.rows[0].reg === null)
+  const survived = await db.query(
+    `SELECT resume_url FROM job_applications WHERE id = $1`, [application.rows[0].id])
+  check('an application whose attachment was a file survives the rollback',
+    /^\/api\/files\/[0-9a-f-]{36}\/download$/.test(survived.rows[0]?.resume_url ?? ''),
+    survived.rows[0]?.resume_url ?? 'row missing')
+  const restoredStates = await db.query(
+    `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+     WHERE conrelid = 'jobs'::regclass AND conname = 'jobs_status_check'`)
+  check('the old job vocabulary is restored by rollback',
+    (restoredStates.rows[0]?.def ?? '').includes("'active'"),
+    restoredStates.rows[0]?.def)
+  const restoredIndexes = new Set((await db.query(
+    `SELECT indexname FROM pg_indexes WHERE schemaname = 'public'`)).rows.map((r) => r.indexname))
+  check('rollback restores the partial indexes it replaced',
+    ['idx_jobs_work_mode', 'idx_jobs_employment_type', 'idx_jobs_experience_level',
+      'idx_jobs_deadline', 'idx_jobs_company'].every((n) => restoredIndexes.has(n)))
 
   // Only 009 is rolled back above; 001-008 are forward-only and have no .down.sql,
   // so re-applying the whole set would re-run CREATE TABLE roles and fail. Re-applying
   // just the reversible migration is what actually needs to succeed.
-  try {
-    await apply(db, (await files()).filter((f) => f.startsWith('009')))
-    const back = await cols('alumni_profiles')
-    check('009 re-applied cleanly after rollback', back.has('major') && back.has('profile_photo'))
-  } catch (e) {
-    check('009 re-applied cleanly after rollback', false, e.message)
+  for (const reversible of ['009', '012']) {
+    try {
+      await apply(db, (await files()).filter((f) => f.startsWith(reversible)))
+      if (reversible === '009') {
+        const back = await cols('alumni_profiles')
+        check('009 re-applied cleanly after rollback', back.has('major') && back.has('profile_photo'))
+      } else {
+        const back4 = await cols('stored_files')
+        const states4 = await db.query(
+          `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+           WHERE conrelid = 'jobs'::regclass AND conname = 'jobs_status_check'`)
+        check('012 re-applied cleanly after rollback',
+          back4.has('storage_key') && (states4.rows[0]?.def ?? '').includes('pending_review'))
+      }
+    } catch (e) {
+      check(`${reversible} re-applied cleanly after rollback`, false, e.message)
+    }
   }
 
   console.log('\n--- directory indexes exist ---')

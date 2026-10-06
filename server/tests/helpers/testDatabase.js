@@ -63,3 +63,16 @@ export async function stopTestDatabase() {
   server = undefined
   db = undefined
 }
+
+/**
+ * Runs a statement on the database itself, without going over the socket.
+ *
+ * PGLiteSocketServer serves one session at a time and a statement the database refuses
+ * ends that session, after which every new connection is reset. Statements used to prove
+ * that the database refuses something therefore go straight to the instance, where one
+ * rejected statement does not stop the next.
+ */
+export async function directQuery(text, params = []) {
+  const result = await db.query(text, params)
+  return { rows: result.rows, rowCount: result.affectedRows }
+}

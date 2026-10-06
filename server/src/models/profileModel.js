@@ -153,16 +153,6 @@ async function resolveProfileTable(userId) {
   throw notFound('Profile')
 }
 
-export async function setStudentResume(userId, { url, filename }) {
-  const { rows } = await query(
-    `UPDATE student_profiles SET resume_url = $2, resume_filename = $3
-     WHERE user_id = $1 RETURNING resume_url, resume_filename`,
-    [userId, url, filename],
-  )
-  if (!rows[0]) throw notFound('Student profile')
-  return rows[0]
-}
-
 export async function ensurePrivacySettings(userId) {
   const { rows } = await query(
     `INSERT INTO privacy_settings (user_id) VALUES ($1)

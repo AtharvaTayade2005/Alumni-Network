@@ -117,10 +117,34 @@ const TEMPLATES = {
     })
     return { html, text: stripTags(html) }
   },
+  /**
+   * An applicant's status changed.
+   *
+   * `status` arrives as a readable phrase rather than a state name, because
+   * "under review" reads correctly in an email and "under_review" reads like a bug.
+   */
   job_application_update: ({ jobTitle, status }) => {
     const html = layout({
       title: 'Application update',
-      body: `<p>Your application for <strong>${jobTitle}</strong> is now <strong>${status.replace('_', ' ')}</strong>.</p>`,
+      body: `<p>Your application for <strong>${jobTitle}</strong> is now <strong>${status}</strong>.</p>`,
+    })
+    return { html, text: stripTags(html) }
+  },
+  /** A recruiter has an application to read. */
+  job_application_received: ({ jobTitle, applicantName }) => {
+    const html = layout({
+      title: 'New job application',
+      body: `<p><strong>${applicantName}</strong> applied to <strong>${jobTitle}</strong>.</p>
+             <p>Open the posting to read their cover letter and resume.</p>`,
+    })
+    return { html, text: stripTags(html) }
+  },
+  /** A decision was made on somebody's posting. */
+  job_posting_decision: ({ jobTitle, decision, note }) => {
+    const html = layout({
+      title: decision === 'published' ? 'Posting approved' : 'Posting not approved',
+      body: `<p>Your posting for <strong>${jobTitle}</strong> is now <strong>${decision}</strong>.</p>
+             ${note ? `<p>A moderator left a note: ${note}</p>` : ''}`,
     })
     return { html, text: stripTags(html) }
   },

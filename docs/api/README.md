@@ -135,7 +135,7 @@ Full reference: [profiles.md](profiles.md). Privacy rules: [../backend/privacy.m
 | POST | `/me/verification` | bearer | Submit an alumni profile for verification |
 | GET | `/me/verification` | bearer | Verification decision history |
 | POST | `/me/resume` | bearer | Upload a resume (PDF/DOC/DOCX, 5 MB) |
-| GET | `/me/resume` | bearer | Resume metadata and download URL |
+| GET | `/me/resume` | bearer | Resume metadata and download path |
 | DELETE | `/me/resume` | bearer | Delete the stored resume |
 | GET | `/skills` | bearer | Browse the shared skill taxonomy |
 | GET | `/directory` | bearer | Search the alumni directory (paginated) |
@@ -256,6 +256,86 @@ Messaging requires an accepted connection unless the recipient's
 Realtime delivery uses Socket.IO (see `server/src/sockets/`). Clients
 authenticate the handshake with the access token; presence is tracked in the
 `user_presence` table.
+
+---
+
+## Files — `/api/files`
+
+Full reference: [file-storage.md](../backend/file-storage.md).
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| POST | `/`, `/resume` | bearer | Upload a document (PDF/DOC/DOCX, 5 MB) |
+| GET | `/` | bearer | The caller's uploads, paginated |
+| GET | `/:fileId` | reader | File metadata |
+| GET | `/:fileId/download` | reader | The bytes, as an attachment |
+| DELETE | `/:fileId` | owner, admin | Delete a file nothing references |
+
+Nothing here is public, and the upload directory is not mounted as static
+content, so these routes are the only way to read a stored file. A document is
+readable by its uploader, by an `ADMIN`, or by the poster of a posting that an
+application has attached it to; everybody else gets `404`, so the answer does
+not confirm that somebody's resume exists. The checksum is re-verified on
+download, and the response is always `attachment`.
+
+---
+
+## Jobs — `/api/jobs`
+
+Full reference: [jobs.md](jobs.md).
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/` | bearer | Search, filter, sort and paginate the board |
+| POST | `/` | poster | Create a posting |
+| GET | `/:jobId` | bearer | One posting |
+| PUT | `/:jobId` | owner, staff | Edit content; status is not editable here |
+| DELETE | `/:jobId` | owner, staff | Delete a posting |
+| PATCH | `/:jobId/status` | varies | Move a posting between states |
+| PATCH | `/:jobId/close` | owner | Close the caller's own posting |
+| PATCH | `/:jobId/moderate` | moderator | `{ action: "approve" \| "remove", reason? }` |
+| POST | `/:jobId/save`, DELETE `/saved/:jobId` | bearer | Save or unsave a posting |
+| GET | `/saved` | bearer | The caller's saved postings |
+| GET | `/companies`, `/companies/:companyId` | bearer | Search companies |
+| GET | `/:jobId/applications` | poster | Applications received on a posting |
+| POST | `/:jobId/applications` | bearer | Apply |
+| PATCH | `/:jobId/applications/:applicationId` | poster | Review one application |
+
+Job statuses are `DRAFT`, `PENDING_REVIEW`, `PUBLISHED`, `CLOSED` and
+`REJECTED` — lowercase in the database, and `under-review`/`UNDER_REVIEW` are
+accepted on input. A non-staff posting always enters review: asking for
+`PUBLISHED` (or the legacy `ACTIVE`) at creation is `403`, not a silent
+downgrade. A posting the caller may not see is `404`, so the board does not
+confirm that a draft exists. Publishing, rejecting and reopening are moderation
+decisions and are enforced by a trigger as well as by the service.
+
+Filters: `search`, `location`, `industry`, `workMode`, `employmentType`,
+`experienceLevel`, `skills` (must have all of them), `salaryMin`/`salaryMax`
+(overlap), `deadline`, `openOnly` (default true), `postedByMe`, `status`, `sort`.
+`meta.pages` is at least 1 so an empty board still reads "page 1 of 1".
+
+---
+
+## Applications — `/api/applications`
+
+Full reference: [applications.md](applications.md).
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/` | bearer | The caller's applications, filterable |
+| GET | `/:applicationId` | participant | One application |
+| PATCH | `/:applicationId/withdraw` | applicant | Withdraw; final, and not reversible |
+
+The same handlers are reachable as `/api/jobs/applications`,
+`/api/jobs/applications/:applicationId` and
+`/api/jobs/:jobId/applications/:applicationId`, because the recruiter's view is
+addressed through the posting and the applicant's is not.
+
+Application statuses are `SUBMITTED`, `UNDER_REVIEW`, `SHORTLISTED`, `ACCEPTED`,
+`REJECTED` and `WITHDRAWN`. One of `resumeFileId`, `resumeUrl` or `externalUrl`
+is required when applying, and `resumeFileId` must name a file the applicant
+uploaded. An application is visible to its applicant, to the poster of the
+posting, and to staff; everybody else gets `404`.
 
 ---
 

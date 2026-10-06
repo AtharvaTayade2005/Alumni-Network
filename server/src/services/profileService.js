@@ -24,6 +24,7 @@ const STUDENT_SHAPE = `
   sp.user_id, sp.degree, sp.major, sp.department, sp.graduation_year,
   sp.expected_graduation, sp.university, sp.location, sp.city, sp.region,
   sp.country, sp.bio, sp.profile_photo, sp.career_interests, sp.year_of_study,
+  sp.resume_file_id, sp.resume_filename,
   sp.verification_status, sp.created_at, sp.updated_at
 `
 
@@ -52,6 +53,28 @@ function alias(out, from, to) {
   if (from !== undefined) out[to] = from
 }
 
+/**
+ * The stored resume, as an authorized path.
+ *
+ * The path grants nothing on its own: reading the file re-checks permission and answers
+ * 404 to anybody else, so naming it here tells a client where to ask without telling a
+ * stranger anything. The raw column is removed on the way out, because a column name in
+ * a response is a contract and this one is a storage detail.
+ */
+function withResumeAlias(out, row) {
+  if (!row.resume_file_id) {
+    delete out.resume_file_id
+    return out
+  }
+  out.resume = {
+    id: row.resume_file_id,
+    filename: row.resume_filename,
+    downloadPath: `/api/files/${row.resume_file_id}/download`,
+  }
+  delete out.resume_file_id
+  return out
+}
+
 function withSpecAliases(row) {
   if (!row) return null
   const out = { ...row }
@@ -68,7 +91,7 @@ function withSpecAliases(row) {
   for (const key of ['university', 'location', 'profile_photo']) {
     alias(out, row[key], key === 'profile_photo' ? 'profilePhoto' : key)
   }
-  return out
+  return withResumeAlias(out, row)
 }
 
 function studentWithSpecAliases(row) {
@@ -90,7 +113,7 @@ function studentWithSpecAliases(row) {
   for (const key of ['university', 'location', 'profile_photo']) {
     alias(out, row[key], key === 'profile_photo' ? 'profilePhoto' : key)
   }
-  return out
+  return withResumeAlias(out, row)
 }
 
 /**
