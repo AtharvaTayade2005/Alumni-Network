@@ -56,3 +56,8 @@ export function getQuery(req) {
 export function getParams(req) {
   return req.params
 }
+
+export function getBody(req) {
+  return req.body
+}
+

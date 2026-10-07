@@ -15,7 +15,7 @@ const PG_ERROR_MAP = {
 }
 
 export function errorHandler(err, req, res, _next) {
-  let statusCode = err.statusCode ?? 500
+  let statusCode = err.statusCode ?? err.status ?? 500
   let message = err.message ?? 'Internal server error'
   let code = err.code ?? 'INTERNAL_ERROR'
   let details = err.details

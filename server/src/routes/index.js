@@ -18,6 +18,10 @@ import adminRoutes from './adminRoutes.js'
 import { csrfProtection, assertDatabaseAvailable } from '../middleware/security.js'
 import { notFound } from '../utils/errors.js'
 
+import donationRoutes from './donationRoutes.js'
+import paymentRoutes from './paymentRoutes.js'
+import reportRoutes from './reportRoutes.js'
+
 const router = Router()
 
 // Liveness first: it must answer even when the database is unreachable.
@@ -66,6 +70,9 @@ router.use('/jobs', jobRoutes)
 // application rather than by posting, plus the file endpoints that carry a resume.
 router.use('/applications', applicationRoutes)
 router.use('/files', fileRoutes)
+router.use('/donations', donationRoutes)
+router.use('/payments', paymentRoutes)
+router.use('/reports', reportRoutes)
 router.use('/admin', adminRoutes)
 
 router.use((req) => {

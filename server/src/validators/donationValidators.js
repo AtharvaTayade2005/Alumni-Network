@@ -15,8 +15,12 @@ export const createDonationSchema = donationSchema
   .strict()
 
 export const confirmDonationSchema = z.object({
-  providerReference: z.string().trim().min(1).max(190),
-}).strict()
+  providerReference: z.string().trim().min(1).max(190).optional(),
+  transactionId: z.string().trim().min(1).max(190).optional(),
+  donationId: z.string().uuid().optional(),
+}).strict().refine((data) => data.providerReference || data.transactionId, {
+  message: 'Either providerReference or transactionId is required',
+})
 
 export const donationIdParamSchema = z.object({
   id: z.string().uuid('Donation id must be a UUID'),

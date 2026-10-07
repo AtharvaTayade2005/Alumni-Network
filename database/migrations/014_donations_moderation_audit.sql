@@ -95,6 +95,8 @@ CREATE INDEX IF NOT EXISTS idx_payment_transactions_user
 -- Receipts: specification fields, backfilled from the donation that owns them
 -- ---------------------------------------------------------------------------
 
+CREATE SEQUENCE IF NOT EXISTS receipt_number_seq START WITH 1001;
+
 ALTER TABLE donation_receipts ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2);
 ALTER TABLE donation_receipts ADD COLUMN IF NOT EXISTS currency
     VARCHAR(3) NOT NULL DEFAULT 'USD';

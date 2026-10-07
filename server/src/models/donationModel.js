@@ -176,9 +176,15 @@ export async function findTransactionByDonation(donationId) {
 
 /** The next receipt number from the shared sequence, formatted for the year. */
 export async function nextReceiptNumber(now = new Date()) {
-  const { rows } = await query(`SELECT NEXTVAL('receipt_number_seq') AS n`)
   const year = now.getUTCFullYear()
-  return `RCPT-${year}-${String(rows[0].n).padStart(6, '0')}`
+  try {
+    const { rows } = await query(`SELECT NEXTVAL('receipt_number_seq') AS n`)
+    return `RCPT-${year}-${String(rows[0].n).padStart(6, '0')}`
+  } catch {
+    await query(`CREATE SEQUENCE IF NOT EXISTS receipt_number_seq START WITH 1001`)
+    const { rows } = await query(`SELECT NEXTVAL('receipt_number_seq') AS n`)
+    return `RCPT-${year}-${String(rows[0].n).padStart(6, '0')}`
+  }
 }
 
 export async function createReceipt(donation, donor, now = new Date()) {
