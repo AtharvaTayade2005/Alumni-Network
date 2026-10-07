@@ -27,7 +27,7 @@ let server
 
 export async function startTestDatabase() {
   db = await PGlite.create({ dataDir: 'memory://' })
-  server = new PGLiteSocketServer({ db, port: TEST_PG_PORT, host: '127.0.0.1' })
+  server = new PGLiteSocketServer({ db, port: TEST_PG_PORT, host: '127.0.0.1', maxConnections: 50 })
   await server.start()
 
   process.env.DATABASE_URL =

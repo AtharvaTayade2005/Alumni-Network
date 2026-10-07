@@ -22,7 +22,7 @@ const pglitePort = (() => {
   }
 })()
 const isPglite = PGLITE_PORTS.has(pglitePort)
-const poolMax = isPglite ? 1 : config.database.poolMax
+const poolMax = isPglite ? 10 : config.database.poolMax
 
 if (isPglite) {
   logger.warn('PGlite development database detected; forcing a single connection')

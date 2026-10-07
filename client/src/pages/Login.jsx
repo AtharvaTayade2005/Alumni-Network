@@ -100,10 +100,6 @@ export default function Login() {
             />
           </Field>
 
-          {error && !Object.keys(error.fields ?? {}).length ? (
-            <Alert tone="error">{error.message}</Alert>
-          ) : null}
-
           <Button type="submit" size="lg" className="w-full mt-2" disabled={submitting}>
             {submitting ? <><Spinner className="border-white/40 border-t-white" /> SIGNING IN...</> : 'SIGN IN &rarr;'}
           </Button>

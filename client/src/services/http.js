@@ -78,11 +78,28 @@ async function parseBody(response) {
   }
 }
 
+function normalizeFields(errors) {
+  if (!errors) return {}
+  if (Array.isArray(errors)) {
+    const map = {}
+    for (const item of errors) {
+      if (item && item.field) {
+        map[item.field] = item.message || 'Invalid value'
+      }
+    }
+    return map
+  }
+  if (typeof errors === 'object') return errors
+  return {}
+}
+
 function toError(status, body) {
-  return new ApiError(status, body?.message ?? `Request failed (${status})`, {
+  const fields = normalizeFields(body?.errors || body?.error?.details)
+  const message = body?.message || body?.error?.message || `Request failed (${status})`
+  return new ApiError(status, message, {
     code: body?.error?.code,
     details: body?.error?.details,
-    errors: body?.errors,
+    errors: fields,
   })
 }
 
@@ -132,15 +149,30 @@ async function send(path, { method = 'GET', body, params, signal, retry = true }
   const accessToken = tokenStore.get()
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`
 
-  const response = await fetch(buildUrl(path, params), {
-    method,
-    headers,
-    body: payload,
-    credentials: 'include',
-    signal,
-  })
+  let response
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+    if (signal) {
+      signal.addEventListener('abort', () => controller.abort())
+    }
 
-  if (response.status === 401 && retry && !path.startsWith('/auth/login')) {
+    response = await fetch(buildUrl(path, params), {
+      method,
+      headers,
+      body: payload,
+      credentials: 'include',
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new ApiError(408, 'Request timed out. Please try again.', { code: 'REQUEST_TIMEOUT' })
+    }
+    throw new ApiError(0, 'Unable to connect to the server. Please ensure the backend is running.', { code: 'NETWORK_ERROR' })
+  }
+
+  if (response.status === 401 && retry && !path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
     const refreshed = await refreshAccessToken().catch(() => null)
     if (refreshed) return send(path, { method, body, params, signal, retry: false })
     tokenStore.clear()

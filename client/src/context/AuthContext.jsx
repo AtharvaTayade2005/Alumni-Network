@@ -46,42 +46,61 @@ export function AuthProvider({ children }) {
   }, [status, user, loadUnread])
 
   const switchDemoUser = useCallback(async (userIdOrRole) => {
-    setStatus('loading')
     try {
       const res = await authApi.switchDemoUser(userIdOrRole)
       setUser(res.data)
       setStatus('authenticated')
+      setSessionError(null)
       loadUnread()
       return res.data
     } catch (err) {
       setSessionError(err)
+      setStatus(user ? 'authenticated' : 'anonymous')
       return null
+    }
+  }, [loadUnread, user])
+
+  const login = useCallback(async (credentials) => {
+    try {
+      const res = await authApi.login(credentials)
+      setUser(res.data.user)
+      setStatus('authenticated')
+      setSessionError(null)
+      loadUnread()
+      return res.data.user
+    } catch (err) {
+      setUser(null)
+      setStatus('anonymous')
+      setSessionError(err)
+      throw err
     }
   }, [loadUnread])
 
-  const login = useCallback(async (credentials) => {
-    setStatus('loading')
-    const res = await authApi.login(credentials)
-    setUser(res.data.user)
-    setStatus('authenticated')
-    loadUnread()
-    return res.data.user
-  }, [loadUnread])
-
   const register = useCallback(async (payload) => {
-    setStatus('loading')
-    const res = await authApi.register(payload)
-    setUser(res.data.user)
-    setStatus('authenticated')
-    loadUnread()
-    return res.data.user
+    try {
+      const res = await authApi.register(payload)
+      setUser(res.data.user)
+      setStatus('authenticated')
+      setSessionError(null)
+      loadUnread()
+      return res.data.user
+    } catch (err) {
+      setUser(null)
+      setStatus('anonymous')
+      setSessionError(err)
+      throw err
+    }
   }, [loadUnread])
 
   const logout = useCallback(async () => {
-    await authApi.logout()
-    setUser(null)
-    setUnreadCount(0)
-    setStatus('anonymous')
+    try {
+      await authApi.logout()
+    } finally {
+      setUser(null)
+      setUnreadCount(0)
+      setStatus('anonymous')
+      setSessionError(null)
+    }
   }, [])
 
   const primaryRole = useMemo(() => getUserPrimaryRole(user), [user])

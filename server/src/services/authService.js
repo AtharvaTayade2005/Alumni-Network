@@ -206,13 +206,14 @@ export function setSessionCookies(res, session) {
   res.cookie(REFRESH_COOKIE, session.refreshToken, cookieOptions())
   res.cookie(CSRF_COOKIE, session.csrfToken, {
     ...cookieOptions(),
+    path: '/',
     httpOnly: false,
   })
 }
 
 export function clearSessionCookies(res) {
   res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' })
-  res.clearCookie(CSRF_COOKIE, { path: '/api/auth' })
+  res.clearCookie(CSRF_COOKIE, { path: '/' })
 }
 
 export async function refresh(rawToken) {
