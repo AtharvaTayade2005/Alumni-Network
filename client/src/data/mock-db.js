@@ -1,4 +1,4 @@
-export const institution = 'Northbridge Institute of Technology'
+export const institution = 'Vidyalankar Institute of Technology'
 
 export const mockUsers = [
   {
@@ -19,7 +19,7 @@ export const mockUsers = [
       { id: 's2', name: 'TypeScript' },
       { id: 's3', name: 'Distributed Systems' }
     ],
-    bio: 'Software engineer with 5+ years of experience building scalable enterprise applications. Passionate about system design and frontend performance. Always happy to mentor recent grads from Northbridge!',
+    bio: 'Software engineer with 5+ years of experience building scalable enterprise applications. Passionate about system design and frontend performance. Always happy to mentor recent grads from Vidyalankar Institute of Technology!',
     verified: true,
     openToMentor: true,
     roles: ['ALUMNI'],
@@ -79,7 +79,7 @@ export const mockUsers = [
     degree: 'B.Tech Computer Engineering',
     department: 'Computer Science',
     currentPosition: 'Student',
-    currentCompany: 'Northbridge Institute of Technology',
+    currentCompany: 'Vidyalankar Institute of Technology',
     city: 'Mumbai',
     country: 'India',
     industry: 'Technology',
@@ -151,7 +151,7 @@ export const mockEvents = [
   {
     id: 'e001',
     title: 'Annual Alumni Networking Night',
-    description: 'Join hundreds of Northbridge alumni for an evening of networking, dinner, and keynote speakers. Reconnect with old friends and expand your professional circle.',
+    description: 'Join hundreds of Vidyalankar Institute of Technology alumni for an evening of networking, dinner, and keynote speakers. Reconnect with old friends and expand your professional circle.',
     date: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
     time: '18:30:00',
     location: 'Taj Lands End, Mumbai',
@@ -159,7 +159,7 @@ export const mockEvents = [
     attendees: 312,
     capacity: 500,
     isVirtual: false,
-    organizer: 'Northbridge Alumni Association',
+    organizer: 'Vidyalankar Institute of Technology Alumni Association',
     speakers: ['Aarav Mehta', 'Neha Kapoor']
   },
   {

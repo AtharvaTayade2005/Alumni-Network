@@ -57,7 +57,7 @@ export default function AppLayout() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <Link to="/" className="shrink-0 flex items-center gap-2">
             <span className="font-mono text-xs font-black tracking-widest bg-swiss-text text-swiss-base px-1.5 py-0.5 rounded-xs">
-              NIT
+              VIT
             </span>
             <span className="text-sm sm:text-base font-bold tracking-tight">
               ALUMNI PORTAL
@@ -196,7 +196,7 @@ export default function AppLayout() {
             <div className="flex items-center gap-4">
               <span>Status: Frontend Active</span>
               <span>·</span>
-              <span>Institution: Northbridge Institute of Technology</span>
+              <span>Institution: Vidyalankar Institute of Technology</span>
             </div>
           </div>
         </footer>

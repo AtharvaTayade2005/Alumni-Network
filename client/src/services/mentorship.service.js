@@ -65,7 +65,7 @@ export const mentorshipService = {
             id: peer.id,
             name: peer.name,
             currentPosition: peer.course || peer.position,
-            currentCompany: peer.company || 'Northbridge Student',
+            currentCompany: peer.company || 'Vidyalankar Institute of Technology Student',
             avatarUrl: peer.avatarUrl || null,
           },
         }
@@ -147,7 +147,7 @@ export const mentorshipService = {
             id: r.student.id,
             name: r.student.name,
             currentPosition: r.student.course,
-            currentCompany: 'Northbridge',
+            currentCompany: 'Vidyalankar Institute of Technology',
             avatarUrl: null,
           },
           areaOfInterest: r.areaOfInterest,

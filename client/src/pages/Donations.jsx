@@ -88,7 +88,7 @@ export default function Donations() {
             ALUMNI GIVING PORTAL
           </h1>
           <p className="mt-2 text-sm text-swiss-muted max-w-2xl">
-            Give back to Northbridge Institute of Technology. Support student scholarships, research lab equipment, and student emergency welfare. Eligible for Section 80G tax benefits.
+            Give back to Vidyalankar Institute of Technology. Support student scholarships, research lab equipment, and student emergency welfare. Eligible for Section 80G tax benefits.
           </p>
         </div>
       </header>
@@ -301,7 +301,7 @@ export default function Donations() {
                 TAX BENEFITS UNDER 80G
               </h4>
               <p className="text-xs text-swiss-muted leading-relaxed">
-                All donations made to the Northbridge Institute Endowment Fund qualify for 50% deduction under Section 80G of the Indian Income Tax Act.
+                All donations made to the Vidyalankar Institute of Technology Endowment Fund qualify for 50% deduction under Section 80G of the Indian Income Tax Act.
               </p>
             </Card>
           </div>

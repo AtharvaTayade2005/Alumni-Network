@@ -58,7 +58,7 @@ export const authService = {
       email: payload.email,
       roles: [payload.role || ROLES.STUDENT],
       role: payload.role || ROLES.STUDENT,
-      headline: `${payload.role || 'Student'} at Northbridge`,
+      headline: `${payload.role || 'Student'} at Vidyalankar Institute of Technology`,
       department: payload.department || 'General',
       graduationYear: Number(payload.graduationYear) || 2026,
       verified: payload.role === ROLES.ALUMNI ? false : true,

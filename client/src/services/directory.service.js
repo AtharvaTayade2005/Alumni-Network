@@ -16,7 +16,7 @@ export const directoryService = {
       const prof = professors.find((p) => p.userId === u.id)
       return {
         ...u,
-        currentCompany: alum?.currentCompany || (prof ? 'Northbridge Faculty' : 'Student'),
+        currentCompany: alum?.currentCompany || (prof ? 'Vidyalankar Institute of Technology Faculty' : 'Student'),
         currentPosition: alum?.currentPosition || prof?.designation || 'Student',
         degree: alum?.degree || student?.course || 'Faculty',
         industry: alum?.industry || (prof ? 'Education & Research' : 'Technology'),

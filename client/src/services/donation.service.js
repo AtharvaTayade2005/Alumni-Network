@@ -55,7 +55,7 @@ export const donationService = {
       date: new Date().toISOString(),
       status: 'completed',
       paymentMethod: payload.paymentMethod || 'UPI / NetBanking',
-      taxExemption80G: `80G-CERT-${new Date().getFullYear()}-NIT-${Math.floor(1000 + Math.random() * 9000)}`,
+      taxExemption80G: `80G-CERT-${new Date().getFullYear()}-VIT-${Math.floor(1000 + Math.random() * 9000)}`,
       isAnonymous: Boolean(payload.isAnonymous),
       message: payload.message || null,
     }

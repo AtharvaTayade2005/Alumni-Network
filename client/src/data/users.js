@@ -8,7 +8,7 @@ export const mockUsers = [
   {
     id: 'u_student_1',
     name: 'Riya Shah',
-    email: 'riya.shah@student.nit.edu',
+    email: 'riya.shah@student.vit.edu.in',
     avatarUrl: null,
     roles: [ROLES.STUDENT],
     role: ROLES.STUDENT,
@@ -25,7 +25,7 @@ export const mockUsers = [
   {
     id: 'u_student_2',
     name: 'Dev Patel',
-    email: 'dev.patel@student.nit.edu',
+    email: 'dev.patel@student.vit.edu.in',
     avatarUrl: null,
     roles: [ROLES.STUDENT],
     role: ROLES.STUDENT,
@@ -42,7 +42,7 @@ export const mockUsers = [
   {
     id: 'u_student_3',
     name: 'Ananya Sharma',
-    email: 'ananya.s@student.nit.edu',
+    email: 'ananya.s@student.vit.edu.in',
     avatarUrl: null,
     roles: [ROLES.STUDENT],
     role: ROLES.STUDENT,
@@ -143,7 +143,7 @@ export const mockUsers = [
   {
     id: 'u_prof_1',
     name: 'Dr. Rajesh Kulkarni',
-    email: 'rajesh.kulkarni@faculty.nit.edu',
+    email: 'rajesh.kulkarni@faculty.vit.edu.in',
     avatarUrl: null,
     roles: [ROLES.PROFESSOR],
     role: ROLES.PROFESSOR,
@@ -160,7 +160,7 @@ export const mockUsers = [
   {
     id: 'u_prof_2',
     name: 'Prof. Sunita Verma',
-    email: 'sunita.verma@faculty.nit.edu',
+    email: 'sunita.verma@faculty.vit.edu.in',
     avatarUrl: null,
     roles: [ROLES.PROFESSOR],
     role: ROLES.PROFESSOR,
@@ -179,7 +179,7 @@ export const mockUsers = [
   {
     id: 'u_admin_1',
     name: 'Vikramaditya Singhania',
-    email: 'admin@nit.edu',
+    email: 'admin@vit.edu.in',
     avatarUrl: null,
     roles: [ROLES.ADMIN],
     role: ROLES.ADMIN,

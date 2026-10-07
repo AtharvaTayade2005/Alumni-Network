@@ -215,7 +215,7 @@ export const jobsService = {
         degree: user.department || 'B.Tech',
         graduationYear: user.graduationYear || 2026,
       },
-      resumeUrl: payload.resumeUrl || 'https://nit.edu/resumes/default.pdf',
+      resumeUrl: payload.resumeUrl || 'https://vit.edu.in/resumes/default.pdf',
       coverLetter: payload.coverLetter || '',
       status: 'submitted',
       appliedAt: new Date().toISOString(),

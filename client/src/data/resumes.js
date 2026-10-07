@@ -19,7 +19,7 @@ export const mockResumes = [
       'Add system metrics (e.g. latency reduction percentages, concurrent users handled)',
       'Include coursework relevant to distributed systems and database internals',
     ],
-    previewText: `RIYA SHAH\nMumbai, India | riya.shah@student.nit.edu | github.com/riyashah | linkedin.com/in/riya-shah-dev\n\nEDUCATION\nNorthbridge Institute of Technology — B.Tech in Computer Science & Engineering\nAug 2022 - Jun 2026 | GPA: 3.85 / 4.0\nRelevant Coursework: Data Structures & Algorithms, Database Management, Operating Systems, Web Technologies\n\nTECHNICAL SKILLS\nLanguages: JavaScript, TypeScript, Python, C++, SQL\nFrameworks & Libraries: React, Node.js, Express, Tailwind CSS, Vite\nDatabases & Cloud: PostgreSQL, MongoDB, Redis, Docker, Git\n\nPROJECTS\nCampus Food Delivery Aggregator (React, Node.js, Socket.io, PostgreSQL)\n• Built real-time order tracking and canteen delivery coordination web application used by 1,200+ campus students.\n• Engineered WebSocket broadcast service reducing order notification latency by 65%.\n• Designed relational schema in PostgreSQL with connection pooling handling 150+ concurrent requests.\n\nPeer Study Room Scheduler (TypeScript, Next.js, Prisma, PostgreSQL)\n• Developed automated conflict-free room reservation engine with Google Calendar two-way synchronization.\n• Implemented role-based access control and student identity verification middleware.`,
+    previewText: `RIYA SHAH\nMumbai, India | riya.shah@student.vit.edu.in | github.com/riyashah | linkedin.com/in/riya-shah-dev\n\nEDUCATION\nVidyalankar Institute of Technology — B.Tech in Computer Science & Engineering\nAug 2022 - Jun 2026 | GPA: 3.85 / 4.0\nRelevant Coursework: Data Structures & Algorithms, Database Management, Operating Systems, Web Technologies\n\nTECHNICAL SKILLS\nLanguages: JavaScript, TypeScript, Python, C++, SQL\nFrameworks & Libraries: React, Node.js, Express, Tailwind CSS, Vite\nDatabases & Cloud: PostgreSQL, MongoDB, Redis, Docker, Git\n\nPROJECTS\nCampus Food Delivery Aggregator (React, Node.js, Socket.io, PostgreSQL)\n• Built real-time order tracking and canteen delivery coordination web application used by 1,200+ campus students.\n• Engineered WebSocket broadcast service reducing order notification latency by 65%.\n• Designed relational schema in PostgreSQL with connection pooling handling 150+ concurrent requests.\n\nPeer Study Room Scheduler (TypeScript, Next.js, Prisma, PostgreSQL)\n• Developed automated conflict-free room reservation engine with Google Calendar two-way synchronization.\n• Implemented role-based access control and student identity verification middleware.`,
   },
   {
     id: 'res_002',
@@ -40,7 +40,7 @@ export const mockResumes = [
       'Expand on cloud deployment platforms (AWS SageMaker / GCP Vertex AI)',
       'Highlight SQL data extraction performance',
     ],
-    previewText: `DEV PATEL\nPune, India | dev.patel@student.nit.edu | github.com/devpatel | linkedin.com/in/dev-patel-ml\n\nEDUCATION\nNorthbridge Institute of Technology — B.Tech in Information Technology\nAug 2021 - May 2025 | GPA: 3.72 / 4.0\n\nSKILLS\nPython, PyTorch, Scikit-Learn, OpenCV, FastAPI, Docker, SQL, Pandas, NumPy\n\nPROJECTS\nDeepfake Video Detection Pipeline (PyTorch, OpenCV, FastAPI)\n• Built hybrid CNN-LSTM network for temporal anomaly detection in manipulated video streams.\n• Deployed model service achieving 92.4% validation F1 score at 30 fps inference latency.`,
+    previewText: `DEV PATEL\nPune, India | dev.patel@student.vit.edu.in | github.com/devpatel | linkedin.com/in/dev-patel-ml\n\nEDUCATION\nVidyalankar Institute of Technology — B.Tech in Information Technology\nAug 2021 - May 2025 | GPA: 3.72 / 4.0\n\nSKILLS\nPython, PyTorch, Scikit-Learn, OpenCV, FastAPI, Docker, SQL, Pandas, NumPy\n\nPROJECTS\nDeepfake Video Detection Pipeline (PyTorch, OpenCV, FastAPI)\n• Built hybrid CNN-LSTM network for temporal anomaly detection in manipulated video streams.\n• Deployed model service achieving 92.4% validation F1 score at 30 fps inference latency.`,
   },
   {
     id: 'res_003',
@@ -61,6 +61,6 @@ export const mockResumes = [
       'Add cloud dashboard integration details',
       'Include software unit testing methodologies',
     ],
-    previewText: `ANANYA SHARMA\nAhmedabad, India | ananya.s@student.nit.edu | github.com/ananyasharma\n\nEDUCATION\nNorthbridge Institute of Technology — B.Tech in Electronics & Communication\nAug 2023 - May 2027 | GPA: 3.91 / 4.0\n\nSKILLS\nC, C++, FreeRTOS, ESP32, Python, MQTT, Embedded Linux\n\nPROJECTS\nSmart Solar Inverter Controller\n• Implemented MPPT algorithms on dual-core ESP32 with FreeRTOS multitasking.`,
+    previewText: `ANANYA SHARMA\nAhmedabad, India | ananya.s@student.vit.edu.in | github.com/ananyasharma\n\nEDUCATION\nVidyalankar Institute of Technology — B.Tech in Electronics & Communication\nAug 2023 - May 2027 | GPA: 3.91 / 4.0\n\nSKILLS\nC, C++, FreeRTOS, ESP32, Python, MQTT, Embedded Linux\n\nPROJECTS\nSmart Solar Inverter Controller\n• Implemented MPPT algorithms on dual-core ESP32 with FreeRTOS multitasking.`,
   },
 ]

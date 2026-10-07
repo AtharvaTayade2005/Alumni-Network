@@ -40,7 +40,7 @@ export const resumeService = {
       improvements: [
         'Add links to live deployments or demo videos alongside GitHub links',
       ],
-      previewText: `${user.name.toUpperCase()}\n${user.email} | Northbridge Institute of Technology\n\nEDUCATION\n${user.department || 'B.Tech CSE'} (Graduation: ${user.graduationYear || 2026})\n\nSKILLS\nReact, TypeScript, Node.js, SQL, Distributed Systems, Git\n\nPROJECTS\nCampus Food Delivery Platform\n• Built real-time WebSockets tracking engine.\n• Designed scalable REST APIs and relational database models.`,
+      previewText: `${user.name.toUpperCase()}\n${user.email} | Vidyalankar Institute of Technology\n\nEDUCATION\n${user.department || 'B.Tech CSE'} (Graduation: ${user.graduationYear || 2026})\n\nSKILLS\nReact, TypeScript, Node.js, SQL, Distributed Systems, Git\n\nPROJECTS\nCampus Food Delivery Platform\n• Built real-time WebSockets tracking engine.\n• Designed scalable REST APIs and relational database models.`,
     }
 
     // Replace or insert

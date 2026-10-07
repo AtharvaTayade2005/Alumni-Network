@@ -22,7 +22,7 @@ export const mockAlumni = [
       { id: 'sk_16', name: 'Distributed Systems' },
       { id: 'sk_17', name: 'System Design' },
     ],
-    bio: 'Software engineer with 5+ years building scalable cloud services and mission-critical developer tooling at Microsoft. Passionate about distributed systems, resilient API design, and mentoring upcoming engineers from Northbridge.',
+    bio: 'Software engineer with 5+ years building scalable cloud services and mission-critical developer tooling at Microsoft. Passionate about distributed systems, resilient API design, and mentoring upcoming engineers from Vidyalankar Institute of Technology.',
     careerJourney: [
       {
         role: 'Senior Software Engineer',

@@ -3,7 +3,7 @@ export const mockProfessors = [
     id: 'prof_001',
     userId: 'u_prof_1',
     name: 'Dr. Rajesh Kulkarni',
-    email: 'rajesh.kulkarni@faculty.nit.edu',
+    email: 'rajesh.kulkarni@faculty.vit.edu.in',
     avatarUrl: null,
     department: 'Computer Science & Engineering',
     designation: 'Professor & Head of Department',
@@ -15,7 +15,7 @@ export const mockProfessors = [
     experienceYears: 18,
     education: [
       { degree: 'Ph.D. in Computer Science', institution: 'IIT Bombay', year: 2008 },
-      { degree: 'M.Tech in Computer Engineering', institution: 'Northbridge Institute of Technology', year: 2003 },
+      { degree: 'M.Tech in Computer Engineering', institution: 'Vidyalankar Institute of Technology', year: 2003 },
     ],
     publications: [
       {
@@ -38,7 +38,7 @@ export const mockProfessors = [
     id: 'prof_002',
     userId: 'u_prof_2',
     name: 'Prof. Sunita Verma',
-    email: 'sunita.verma@faculty.nit.edu',
+    email: 'sunita.verma@faculty.vit.edu.in',
     avatarUrl: null,
     department: 'Information Technology',
     designation: 'Associate Professor & Placement Liaison',
@@ -50,7 +50,7 @@ export const mockProfessors = [
     experienceYears: 12,
     education: [
       { degree: 'Ph.D. in Information Technology', institution: 'IISc Bangalore', year: 2014 },
-      { degree: 'B.Tech in Computer Science', institution: 'Northbridge Institute of Technology', year: 2009 },
+      { degree: 'B.Tech in Computer Science', institution: 'Vidyalankar Institute of Technology', year: 2009 },
     ],
     publications: [
       {
