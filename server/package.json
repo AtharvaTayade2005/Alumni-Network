@@ -19,6 +19,7 @@
     "db:reset": "node src/scripts/reset-db.js",
     "dev:db": "node scripts/dev-postgres.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "test:auth": "node --test \"tests/auth.test.js\"",
     "test:watch": "node --test --watch \"tests/**/*.test.js\"",
     "smoke": "node scripts/smoke.js",
     "verify:migrations": "node scripts/verify-migrations.mjs",
