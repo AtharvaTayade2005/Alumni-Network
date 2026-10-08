@@ -49,3 +49,10 @@ export const uploadLimiter = build({
   max: config.security.maxUploadAttempts,
   message: 'Too many file uploads. Please try again later.',
 })
+
+export const aiLimiter = build({
+  windowMs: 15 * 60 * 1000,
+  max: config.isTest ? 10000 : (config.ai?.maxRequestsPerWindow ?? 30),
+  message: 'AI request limit reached. Please wait a few moments before trying again.',
+})
+

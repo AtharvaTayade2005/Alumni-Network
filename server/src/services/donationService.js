@@ -165,6 +165,24 @@ export async function listMyDonations(user, { page = 1, limit = 20 } = {}) {
   }
 }
 
+export async function listAllDonations({ page = 1, limit = 50 } = {}) {
+  const offset = (page - 1) * limit
+  const [donations, total] = await Promise.all([
+    donationModel.listAllDonations({ limit, offset }),
+    donationModel.countAllDonations(),
+  ])
+
+  return {
+    donations,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  }
+}
+
 export async function getDonationReceipt(user, donationId) {
   const donation = await donationModel.findDonationById(donationId)
   if (!donation) throw notFound('Donation')

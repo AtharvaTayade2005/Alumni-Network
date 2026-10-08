@@ -21,7 +21,7 @@ export default function Resume() {
     setLoading(true)
     setError(null)
     try {
-      const res = await resumes.get(user?.id)
+      const res = await resumes.get()
       setResume(res.data)
       setLoading(false)
     } catch (err) {
@@ -40,10 +40,7 @@ export default function Resume() {
     setUploading(true)
     setMessage(null)
     try {
-      const res = await resumes.upload({
-        name: file.name,
-        size: file.size,
-      })
+      const res = await resumes.upload(file)
       setResume(res.data)
       setMessage({ tone: 'success', text: 'Resume uploaded and analyzed successfully!' })
       setAiAnalysis(null)
@@ -58,7 +55,7 @@ export default function Resume() {
     if (!resume) return
     setUploading(true)
     try {
-      await resumes.delete(resume.id)
+      await resumes.delete()
       setResume(null)
       setAiAnalysis(null)
       setMessage({ tone: 'info', text: 'Resume removed from your profile.' })

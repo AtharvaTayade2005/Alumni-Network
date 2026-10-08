@@ -21,6 +21,8 @@ export function formatDonation(row) {
     provider: row.provider,
     status: row.status,
     purpose: row.purpose,
+    fundName: row.purpose || 'General Endowment Fund',
+    receiptNumber: row.receipt_number ?? null,
     message: row.message,
     isAnonymous: row.is_anonymous,
     createdAt: row.created_at,
@@ -146,6 +148,37 @@ export async function countDonationsByUser(userId) {
     [userId],
   )
   return rows[0].total
+}
+
+export async function listAllDonations({ limit = 50, offset = 0 } = {}) {
+  const { rows } = await query(
+    `SELECT d.*, r.receipt_number, r.donor_name, r.donor_email,
+            u.first_name, u.last_name, u.email AS user_email
+     FROM donations d
+     LEFT JOIN donation_receipts r ON r.donation_id = d.id
+     LEFT JOIN users u ON u.id = d.user_id
+     ORDER BY d.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
+  )
+  return rows.map((r) => ({
+    id: r.id,
+    receiptNumber: r.receipt_number || `RCPT-${new Date(r.created_at).getFullYear()}-${r.id.slice(0, 6).toUpperCase()}`,
+    donorName: r.is_anonymous ? 'Anonymous Donor' : (r.donor_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || 'Alumni Supporter'),
+    donorEmail: r.is_anonymous ? null : (r.donor_email || r.user_email),
+    fundName: r.purpose || 'General Endowment Fund',
+    amount: Number(r.amount),
+    currency: String(r.currency).trim(),
+    status: r.status,
+    taxExemption80G: `80G-CERT-${new Date(r.created_at).getFullYear()}-VIT-${r.id.slice(0, 6).toUpperCase()}`,
+    date: r.created_at,
+    createdAt: r.created_at,
+  }))
+}
+
+export async function countAllDonations() {
+  const { rows } = await query(`SELECT COUNT(*)::int AS total FROM donations`)
+  return rows[0]?.total ?? 0
 }
 
 export async function findTransactionByProviderId(provider, transactionId) {

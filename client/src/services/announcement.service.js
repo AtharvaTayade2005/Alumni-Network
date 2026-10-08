@@ -1,5 +1,5 @@
 import { db } from '../data/index.js'
-import { authService } from './auth.service.js'
+import { api } from './http.js'
 
 const delay = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -29,8 +29,13 @@ export const announcementService = {
 
   async create(payload) {
     await delay(120)
-    const session = await authService.getSession()
-    const user = session.data
+    let user = { id: 'u_faculty_1', name: 'Faculty Member' }
+    try {
+      const res = await api.get('/auth/me')
+      user = res.data?.user || res.data || user
+    } catch {
+      // keep fallback
+    }
 
     const newAnnouncement = {
       id: `ann_${Date.now()}`,

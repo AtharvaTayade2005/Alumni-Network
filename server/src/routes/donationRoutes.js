@@ -16,6 +16,8 @@ router.use(authenticate)
 router.post('/create', validate({ body: createDonationSchema }), controller.create)
 router.post('/confirm', validate({ body: confirmDonationSchema }), controller.confirm)
 router.get('/my', validate({ query: listDonationsQuerySchema }), controller.myDonations)
+router.get('/', validate({ query: listDonationsQuerySchema }), controller.listAll)
+router.get('/all', validate({ query: listDonationsQuerySchema }), controller.listAll)
 router.get('/receipts/:id', validate({ params: donationIdParamSchema }), controller.getReceipt)
 
 export default router

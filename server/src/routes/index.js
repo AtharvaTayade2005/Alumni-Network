@@ -21,6 +21,7 @@ import { notFound } from '../utils/errors.js'
 import donationRoutes from './donationRoutes.js'
 import paymentRoutes from './paymentRoutes.js'
 import reportRoutes from './reportRoutes.js'
+import aiRoutes from './aiRoutes.js'
 
 const router = Router()
 
@@ -73,6 +74,7 @@ router.use('/files', fileRoutes)
 router.use('/donations', donationRoutes)
 router.use('/payments', paymentRoutes)
 router.use('/reports', reportRoutes)
+router.use('/ai', aiRoutes)
 router.use('/admin', adminRoutes)
 
 router.use((req) => {

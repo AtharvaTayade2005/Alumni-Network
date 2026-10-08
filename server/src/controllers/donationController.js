@@ -25,6 +25,12 @@ export const myDonations = asyncHandler(async (req, res) => {
   sendSuccess(res, result.donations, { meta: result.meta })
 })
 
+export const listAll = asyncHandler(async (req, res) => {
+  const query = getQuery(req)
+  const result = await donationService.listAllDonations(query)
+  sendSuccess(res, result.donations, { meta: result.meta })
+})
+
 export const getReceipt = asyncHandler(async (req, res) => {
   const { id } = getParams(req)
   const result = await donationService.getDonationReceipt(req.user, id)
