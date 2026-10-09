@@ -27,24 +27,89 @@ export const aiService = {
 
   /**
    * ATS resume analyzer & skills extractor
-   * @param {string} resumeText Extracted text from resume document
-   * @param {string} targetRole Target role title
+   * @param {FormData|Object|string} payload File FormData, JSON payload object, or resumeText string
+   * @param {string} [targetRole] Target role title (optional)
    */
-  async analyzeResume(resumeText, targetRole = 'Software Engineer') {
-    const res = await api.post('/ai/resume/analyze', { resumeText, targetRole })
+  async analyzeResume(payload, targetRole) {
+    let body
+    if (payload instanceof FormData) {
+      body = payload
+    } else if (typeof payload === 'object' && payload !== null) {
+      body = payload
+    } else if (typeof payload === 'string') {
+      body = { resumeText: payload, targetRole: targetRole || undefined }
+    } else {
+      body = {}
+    }
+    const res = await api.post('/ai/resume/analyze', body)
     return res?.data || res
   },
 
   /**
    * Skill gap and career progression evaluation
-   * @param {string} jobTitle Target role title
-   * @param {Array<string>} currentSkills Candidate skills
+   * @param {Object|string} params Target role string or options object
    */
-  async analyzeJobReadiness(jobTitle = 'Frontend Engineer', currentSkills = []) {
-    const res = await api.post('/ai/career/analyze', {
-      targetRole: jobTitle,
-      currentSkills,
-    })
+  async analyzeJobReadiness(params = 'Frontend Developer', currentSkills = []) {
+    let body = {}
+    if (typeof params === 'string') {
+      body = { targetRole: params, currentSkills }
+    } else if (typeof params === 'object' && params !== null) {
+      body = params
+    } else {
+      body = { targetRole: 'Frontend Developer', currentSkills }
+    }
+    const res = await api.post('/ai/career/analyze', body)
+    return res?.data || res
+  },
+
+  /**
+   * Fetches existing readiness state and active roadmap
+   */
+  async getReadiness(targetRole, jobId) {
+    const params = new URLSearchParams()
+    if (targetRole) params.set('targetRole', targetRole)
+    if (jobId) params.set('jobId', jobId)
+    const queryStr = params.toString() ? `?${params.toString()}` : ''
+    const res = await api.get(`/ai/readiness${queryStr}`)
+    return res?.data || res
+  },
+
+  /**
+   * Fetches current career roadmap and tasks
+   */
+  async getRoadmap(roadmapId, targetRole, jobId) {
+    const params = new URLSearchParams()
+    if (roadmapId) params.set('roadmapId', roadmapId)
+    if (targetRole) params.set('targetRole', targetRole)
+    if (jobId) params.set('jobId', jobId)
+    const queryStr = params.toString() ? `?${params.toString()}` : ''
+    const res = await api.get(`/ai/roadmap${queryStr}`)
+    return res?.data || res
+  },
+
+  /**
+   * Generates or regenerates a personalized learning roadmap
+   */
+  async generateRoadmap({ targetRole, jobId, regenerate = false } = {}) {
+    const res = await api.post('/ai/roadmap/generate', { targetRole, jobId, regenerate })
+    return res?.data || res
+  },
+
+  /**
+   * Updates completion state for a roadmap task
+   */
+  async updateRoadmapTask(taskId, isCompleted) {
+    const res = await api.patch(`/ai/roadmap/tasks/${taskId}`, { isCompleted })
+    return res?.data || res
+  },
+
+  /**
+   * Retrieves verified platform mentors and published events
+   */
+  async getLearningResources(targetRole) {
+    const queryStr = targetRole ? `?targetRole=${encodeURIComponent(targetRole)}` : ''
+    const res = await api.get(`/ai/readiness/resources${queryStr}`)
     return res?.data || res
   },
 }
+

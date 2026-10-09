@@ -131,6 +131,9 @@ export default function Dashboard() {
         <div className="flex flex-wrap gap-2.5">
           {role === ROLES.STUDENT && (
             <>
+              <Link to="/job-readiness">
+                <Button variant="secondary">JOB READINESS &rarr;</Button>
+              </Link>
               <Link to="/mentorship">
                 <Button variant="secondary">FIND A MENTOR →</Button>
               </Link>
