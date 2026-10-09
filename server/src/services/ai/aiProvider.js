@@ -14,6 +14,9 @@ export function getAiProvider(forcedType = null) {
   const type = (forcedType || config.ai.provider || 'gemini').toLowerCase()
 
   if (type === 'test') {
+    if (config.isProduction) {
+      throw new AppError(500, 'Test AI provider is disabled in production. Configure a valid AI provider (gemini or openai).')
+    }
     return new TestProvider()
   }
 
