@@ -155,7 +155,7 @@ export default function ResumeAnalyzer() {
         </div>
         {status === 'result' && (
           <Button variant="secondary" onClick={handleReset}>
-            &larr; Analyze Another Resume
+            ← Analyze Another Resume
           </Button>
         )}
       </header>
@@ -271,7 +271,7 @@ export default function ResumeAnalyzer() {
                       <div className="text-center py-4 space-y-3">
                         <p className="text-sm text-swiss-muted">No resume found on your profile.</p>
                         <Link to="/resume" className="inline-block text-xs font-mono text-swiss-accent underline">
-                          Upload a resume in My Resume &rarr;
+                          Upload a resume in My Resume →
                         </Link>
                       </div>
                     )}
@@ -362,7 +362,7 @@ export default function ResumeAnalyzer() {
                     (inputMode === 'text' && resumeText.trim().length < 20)
                   }
                 >
-                  Run ATS Analysis &rarr;
+                  Run ATS Analysis →
                 </Button>
               </div>
             </Card>
@@ -752,7 +752,7 @@ export default function ResumeAnalyzer() {
 
               <div className="pt-2 flex justify-end">
                 <Link to={`/jobs`}>
-                  <Button size="sm" variant="secondary">View Job Details &rarr;</Button>
+                  <Button size="sm" variant="secondary">View Job Details →</Button>
                 </Link>
               </div>
             </Card>

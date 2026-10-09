@@ -80,7 +80,7 @@ export default function AlumniProfile() {
         onClick={() => navigate(-1)}
         className="text-sm font-mono tracking-widest text-swiss-muted hover:text-swiss-text uppercase mb-2"
       >
-        &larr; Back
+        ← Back
       </button>
 
       <header className="mb-4">

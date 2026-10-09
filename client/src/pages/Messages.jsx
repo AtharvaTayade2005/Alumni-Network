@@ -177,7 +177,7 @@ export default function Messages() {
                   className="lg:hidden text-swiss-muted hover:text-swiss-text p-1"
                   onClick={() => navigate('/messages')}
                 >
-                  &larr;
+                  ←
                 </button>
                 <Avatar name={active?.name} src={active?.avatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">

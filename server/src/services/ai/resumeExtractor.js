@@ -1,11 +1,33 @@
 import { createRequire } from 'node:module'
-import mammoth from 'mammoth'
 import config from '../../config/env.js'
 import { unprocessable } from '../../utils/errors.js'
 import { detectDocumentType } from '../storageService.js'
 
 const require = createRequire(import.meta.url)
-const { PDFParse } = require('pdf-parse')
+
+let mammothModule = null
+async function getMammoth() {
+  if (mammothModule) return mammothModule
+  try {
+    const mod = await import('mammoth')
+    mammothModule = mod.default || mod
+    return mammothModule
+  } catch (err) {
+    throw unprocessable(`Document parsing library (mammoth) unavailable: ${err.message}`)
+  }
+}
+
+let pdfParseModule = null
+function getPdfParse() {
+  if (pdfParseModule) return pdfParseModule
+  try {
+    const { PDFParse } = require('pdf-parse')
+    pdfParseModule = PDFParse
+    return pdfParseModule
+  } catch (err) {
+    throw unprocessable(`PDF parsing library (pdf-parse) unavailable: ${err.message}`)
+  }
+}
 
 const MAX_RESUME_CHARS = 50000
 const MIN_RESUME_CHARS = 20
@@ -71,6 +93,7 @@ export async function extractTextFromBuffer(buffer, { mimeType = '', originalNam
 
   if (detectedType === 'application/pdf') {
     try {
+      const PDFParse = getPdfParse()
       const parser = new PDFParse({ data: buffer })
       const parsed = await parser.getText()
       await parser.destroy().catch(() => {})
@@ -80,6 +103,7 @@ export async function extractTextFromBuffer(buffer, { mimeType = '', originalNam
     }
   } else if (detectedType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     try {
+      const mammoth = await getMammoth()
       const result = await mammoth.extractRawText({ buffer })
       extractedRawText = result?.value || ''
     } catch (err) {

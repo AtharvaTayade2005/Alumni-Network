@@ -132,7 +132,7 @@ export default function Dashboard() {
           {role === ROLES.STUDENT && (
             <>
               <Link to="/job-readiness">
-                <Button variant="secondary">JOB READINESS &rarr;</Button>
+                <Button variant="secondary">JOB READINESS →</Button>
               </Link>
               <Link to="/mentorship">
                 <Button variant="secondary">FIND A MENTOR →</Button>

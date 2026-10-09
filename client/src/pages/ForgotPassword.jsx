@@ -88,7 +88,7 @@ export default function ForgotPassword() {
 
             <div className="pt-4 border-t border-swiss-border flex items-center justify-between text-xs">
               <Link to="/login" className="font-mono text-[10px] tracking-widest text-swiss-label uppercase hover:text-swiss-text">
-                &larr; BACK TO SIGN IN
+                ← BACK TO SIGN IN
               </Link>
               <Link to="/register" className="font-mono text-[10px] tracking-widest text-swiss-label uppercase hover:text-swiss-text">
                 CREATE ACCOUNT →

@@ -128,7 +128,7 @@ export default function ResetPassword() {
 
             <div className="pt-4 border-t border-swiss-border text-center">
               <Link to="/login" className="font-mono text-[10px] tracking-widest text-swiss-label uppercase hover:text-swiss-text">
-                &larr; BACK TO SIGN IN
+                ← BACK TO SIGN IN
               </Link>
             </div>
           </form>

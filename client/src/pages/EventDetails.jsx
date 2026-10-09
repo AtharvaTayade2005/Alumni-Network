@@ -67,7 +67,7 @@ export default function EventDetails() {
         onClick={() => navigate(-1)}
         className="text-xs font-mono tracking-widest text-swiss-muted hover:text-swiss-text uppercase"
       >
-        &larr; BACK TO EVENTS
+        ← BACK TO EVENTS
       </button>
 
       {message && (
