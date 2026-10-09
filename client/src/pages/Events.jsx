@@ -198,7 +198,7 @@ export default function Events() {
             <div className="pt-4 border-t border-swiss-border flex items-center gap-3">
               <Button type="button" onClick={() => setCreating(false)} variant="secondary">Cancel</Button>
               <Button type="submit" disabled={saving}>
-                {saving ? <><Spinner /> PUBLISHING...</> : 'PUBLISH EVENT &rarr;'}
+                {saving ? <><Spinner /> PUBLISHING...</> : 'PUBLISH EVENT →'}
               </Button>
             </div>
           </form>

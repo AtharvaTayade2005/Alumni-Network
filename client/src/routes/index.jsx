@@ -1,6 +1,9 @@
 import Home from '../pages/Home.jsx'
 import Login from '../pages/Login.jsx'
 import Register from '../pages/Register.jsx'
+import ForgotPassword from '../pages/ForgotPassword.jsx'
+import ResetPassword from '../pages/ResetPassword.jsx'
+import VerifyEmail from '../pages/VerifyEmail.jsx'
 import Dashboard from '../pages/Dashboard.jsx'
 import Profile from '../pages/Profile.jsx'
 import Directory from '../pages/Directory.jsx'
@@ -32,6 +35,9 @@ const routes = [
   { path: '/', element: <Home /> },
   { path: '/login', element: anonymous(<Login />) },
   { path: '/register', element: anonymous(<Register />) },
+  { path: '/forgot-password', element: anonymous(<ForgotPassword />) },
+  { path: '/reset-password', element: anonymous(<ResetPassword />) },
+  { path: '/verify-email', element: <VerifyEmail /> },
   { path: '/dashboard', element: auth(<Dashboard />) },
   { path: '/profile', element: auth(<Profile />) },
   { path: '/directory', element: auth(<Directory />) },

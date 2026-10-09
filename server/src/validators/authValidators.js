@@ -39,7 +39,7 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })
 
-export const ROLE_VALUES = ['ALUMNI', 'STUDENT']
+export const ROLE_VALUES = ['ALUMNI', 'STUDENT', 'PROFESSOR', 'FACULTY']
 
 export const registerSchema = z.object({
   email: emailSchema,
@@ -61,7 +61,7 @@ export const registerSchema = z.object({
       message: 'Graduation year is required for alumni accounts',
     })
   }
-  if (data.role === 'ALUMNI' && data.yearOfStudy !== undefined) {
+  if ((data.role === 'ALUMNI' || data.role === 'PROFESSOR' || data.role === 'FACULTY') && data.yearOfStudy !== undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['yearOfStudy'],

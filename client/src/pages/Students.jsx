@@ -237,7 +237,7 @@ export default function Students() {
                       onClick={handleSendGuidance}
                       disabled={!guidanceNote.trim()}
                     >
-                      DISPATCH GUIDANCE &rarr;
+                      DISPATCH GUIDANCE →
                     </Button>
                     <Button
                       variant="ghost"

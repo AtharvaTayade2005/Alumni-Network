@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pool, query, closePool } from '../config/database.js'
+import { ensureDevDatabase } from '../config/devDbAutoStart.js'
 
 const migrationsDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -14,6 +15,7 @@ const migrationsDir = path.resolve(
 )
 
 async function ensureMigrationsTable() {
+  await ensureDevDatabase()
   await query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       filename VARCHAR(255) PRIMARY KEY,

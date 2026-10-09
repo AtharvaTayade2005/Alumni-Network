@@ -30,6 +30,8 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false)
 
   const isAlumni = form.role === 'ALUMNI'
+  const isStudent = form.role === 'STUDENT'
+  const isFaculty = form.role === 'PROFESSOR' || form.role === 'FACULTY'
 
   function update(field) {
     return (event) => {
@@ -43,10 +45,23 @@ export default function Register() {
     setForm((prev) => ({
       ...prev,
       role,
-      // Clear the field the new role does not use so the payload stays clean.
       graduationYear: role === 'ALUMNI' ? prev.graduationYear : '',
-      yearOfStudy: role === 'STUDENT' ? prev.yearOfStudy : '',
+      yearOfStudy: role === 'STUDENT' ? (prev.yearOfStudy || '1') : '',
     }))
+  }
+
+  function getReadableErrorMessage(err) {
+    if (!err) return null
+    if (err.status === 409 || err.code === 'CONFLICT' || err.message?.toLowerCase().includes('already exists')) {
+      return 'An account with this email address already exists. Please sign in or use forgot password.'
+    }
+    if (err.status === 503 || err.message?.toLowerCase().includes('database unavailable')) {
+      return 'Database service is temporarily unavailable. Please verify the PostgreSQL or PGlite server is running.'
+    }
+    if (err.code === 'NETWORK_ERROR' || err.status === 0) {
+      return 'Cannot reach the backend API at http://localhost:5000. Ensure the backend server is active.'
+    }
+    return err.message || 'An unexpected error occurred during account creation.'
   }
 
   async function onSubmit(event) {
@@ -56,16 +71,18 @@ export default function Register() {
     const payload = {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
-      email: form.email.trim(),
+      email: form.email.trim().toLowerCase(),
       password: form.password,
       role: form.role,
       acceptTerms: form.acceptTerms,
     }
+
     if (isAlumni) {
       payload.graduationYear = Number(form.graduationYear) || undefined
-    } else {
+    } else if (isStudent) {
       payload.yearOfStudy = Number(form.yearOfStudy) || undefined
     }
+
     if (form.degree.trim()) payload.degree = form.degree.trim()
     if (form.department.trim()) payload.department = form.department.trim()
 
@@ -86,11 +103,15 @@ export default function Register() {
         <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase mb-2">AUTH &mdash; 02</p>
         <h1 className="text-2xl font-bold tracking-tight text-swiss-text">CREATE YOUR ACCOUNT</h1>
         <p className="mt-2 text-sm text-swiss-muted leading-relaxed">
-          Join the alumni network to find people, share opportunities, and stay connected.
+          Join the alumni network to connect with peers, find mentors, share opportunities, and stay in touch.
         </p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-6" noValidate>
-          <FieldErrorSummary error={error} />
+          {error && !Object.keys(error?.fields ?? {}).length ? (
+            <Alert tone="error">{getReadableErrorMessage(error)}</Alert>
+          ) : (
+            <FieldErrorSummary error={error} />
+          )}
 
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="First name" required>
@@ -100,6 +121,7 @@ export default function Register() {
                 value={form.firstName}
                 onChange={update('firstName')}
                 invalid={Boolean(error?.fields?.firstName)}
+                disabled={submitting}
               />
             </Field>
             <Field label="Last name" required>
@@ -109,6 +131,7 @@ export default function Register() {
                 value={form.lastName}
                 onChange={update('lastName')}
                 invalid={Boolean(error?.fields?.lastName)}
+                disabled={submitting}
               />
             </Field>
           </div>
@@ -122,12 +145,13 @@ export default function Register() {
               value={form.email}
               onChange={update('email')}
               invalid={Boolean(error?.fields?.email)}
+              disabled={submitting}
             />
           </Field>
 
           <Field
             label="Password"
-            hint="At least 10 characters with a number and a symbol"
+            hint="At least 10 characters with upper, lower, number, and symbol"
             required
           >
             <Input
@@ -137,26 +161,27 @@ export default function Register() {
               value={form.password}
               onChange={update('password')}
               invalid={Boolean(error?.fields?.password)}
+              disabled={submitting}
             />
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2 border-t border-swiss-border pt-6 mt-2">
             <Field label="I am a" required>
-              <Select value={form.role} onChange={onRoleChange}>
+              <Select value={form.role} onChange={onRoleChange} disabled={submitting}>
                 <option value="ALUMNI">Alumni</option>
                 <option value="STUDENT">Current student</option>
-                <option value="FACULTY">Faculty</option>
-                <option value="STAFF">Staff</option>
+                <option value="PROFESSOR">Faculty / Professor</option>
               </Select>
             </Field>
 
-            {isAlumni ? (
+            {isAlumni && (
               <Field label="Graduation year" required>
                 <Select
                   required
                   value={form.graduationYear}
                   onChange={update('graduationYear')}
                   invalid={Boolean(error?.fields?.graduationYear)}
+                  disabled={submitting}
                 >
                   <option value="">Select year</option>
                   {graduationYears.map((year) => (
@@ -164,11 +189,14 @@ export default function Register() {
                   ))}
                 </Select>
               </Field>
-            ) : (
+            )}
+
+            {isStudent && (
               <Field label="Year of study" required>
                 <Select
                   value={form.yearOfStudy}
                   onChange={update('yearOfStudy')}
+                  disabled={submitting}
                 >
                   {[1, 2, 3, 4, 5, 6].map((year) => (
                     <option key={year} value={year}>Year {year}</option>
@@ -176,15 +204,38 @@ export default function Register() {
                 </Select>
               </Field>
             )}
+
+            {isFaculty && (
+              <Field label="Academic Department" required>
+                <Input
+                  value={form.department}
+                  onChange={update('department')}
+                  placeholder="e.g. Computer Science & Eng."
+                  disabled={submitting}
+                />
+              </Field>
+            )}
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Degree" hint="Optional">
-              <Input value={form.degree} onChange={update('degree')} placeholder="BSc Computer Science" />
+            <Field label="Degree / Qualification" hint="Optional">
+              <Input
+                value={form.degree}
+                onChange={update('degree')}
+                placeholder={isFaculty ? 'Ph.D. / M.Tech' : 'B.Tech Computer Science'}
+                disabled={submitting}
+              />
             </Field>
-            <Field label="Department" hint="Optional">
-              <Input value={form.department} onChange={update('department')} placeholder="Computing" />
-            </Field>
+            {!isFaculty && (
+              <Field label="Department / Major" hint="Optional">
+                <Input
+                  value={form.department}
+                  onChange={update('department')}
+                  placeholder="Computer Engineering"
+                  disabled={submitting}
+                />
+              </Field>
+            )}
           </div>
 
           <div className="border-t border-swiss-border pt-6">
@@ -192,6 +243,7 @@ export default function Register() {
               label="I accept the terms of use and privacy policy"
               checked={form.acceptTerms}
               onChange={update('acceptTerms')}
+              disabled={submitting}
             />
             {error?.fields?.acceptTerms ? (
               <p className="mt-2 text-xs font-mono text-red-500">
@@ -200,22 +252,27 @@ export default function Register() {
             ) : null}
           </div>
 
-          {error && !Object.keys(error.fields ?? {}).length ? (
-            <Alert tone="error">{error.message}</Alert>
-          ) : null}
-
           <Button type="submit" size="lg" className="w-full mt-2" disabled={submitting}>
-            {submitting ? <><Spinner className="border-white/40 border-t-white" /> CREATING ACCOUNT...</> : 'CREATE ACCOUNT &rarr;'}
+            {submitting ? (
+              <>
+                <Spinner className="border-white/40 border-t-white" /> CREATING ACCOUNT...
+              </>
+            ) : (
+              'CREATE ACCOUNT →'
+            )}
           </Button>
         </form>
 
-        <div className="mt-8 border-t border-swiss-border pt-6">
+        <div className="mt-8 border-t border-swiss-border pt-6 flex items-center justify-between text-xs">
           <p className="text-sm text-swiss-muted">
             Already registered?{' '}
             <Link to="/login" className="font-mono text-[10px] tracking-widest text-swiss-label uppercase hover:text-swiss-text">
-              SIGN IN &rarr;
+              SIGN IN →
             </Link>
           </p>
+          <Link to="/verify-email" className="font-mono text-[10px] tracking-widest text-swiss-label uppercase hover:text-swiss-text">
+            VERIFY EMAIL →
+          </Link>
         </div>
       </Card>
     </div>

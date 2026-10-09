@@ -41,7 +41,7 @@ export function Forbidden() {
 
         <div className="pt-4 flex justify-center gap-2">
           <Link to="/"><Button variant="secondary">Go Home</Button></Link>
-          <Link to="/dashboard"><Button>Go to Dashboard &rarr;</Button></Link>
+          <Link to="/dashboard"><Button>Go to Dashboard →</Button></Link>
         </div>
       </div>
     </Card>
@@ -58,7 +58,7 @@ export function Unauthorized() {
           Please log in to access this feature.
         </p>
         <div className="mt-6 flex justify-center gap-2">
-          <Link to="/login"><Button>Log In &rarr;</Button></Link>
+          <Link to="/login"><Button>Log In →</Button></Link>
         </div>
       </div>
     </Card>

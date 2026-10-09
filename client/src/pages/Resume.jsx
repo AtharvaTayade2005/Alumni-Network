@@ -103,7 +103,7 @@ export default function Resume() {
               disabled={uploading}
             />
             <Button as="span" variant="primary" disabled={uploading}>
-              {uploading ? <><Spinner /> Uploading...</> : 'UPLOAD NEW RESUME &rarr;'}
+              {uploading ? <><Spinner /> Uploading...</> : 'UPLOAD NEW RESUME →'}
             </Button>
           </label>
         </div>
@@ -284,7 +284,7 @@ export default function Resume() {
                   <ul className="space-y-1.5 text-xs text-swiss-muted">
                     {resume.improvements?.map((imp, idx) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <span className="text-amber-500 font-bold">&rarr;</span>
+                        <span className="text-amber-500 font-bold">→</span>
                         <span>{imp}</span>
                       </li>
                     ))}
@@ -294,7 +294,7 @@ export default function Resume() {
                 <div className="pt-2">
                   <Link to="/job-readiness" className="w-full block">
                     <Button variant="secondary" className="w-full justify-center text-xs font-mono uppercase">
-                      VIEW FULL JOB READINESS &rarr;
+                      VIEW FULL JOB READINESS →
                     </Button>
                   </Link>
                 </div>

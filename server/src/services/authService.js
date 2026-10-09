@@ -85,6 +85,13 @@ export async function register(payload, context = {}) {
         [userId, payload.graduationYear, payload.degree ?? null,
           payload.department ?? null, payload.studentIdNumber ?? null],
       )
+    } else if (payload.role === 'PROFESSOR' || payload.role === 'FACULTY') {
+      await client.query(
+        `INSERT INTO alumni_profiles (user_id, degree, department, current_position,
+           is_open_to_mentor, verification_status)
+         VALUES ($1,$2,$3,$4,TRUE,'verified')`,
+        [userId, payload.degree ?? 'Ph.D.', payload.department ?? 'Faculty', 'Faculty Advisor'],
+      )
     } else {
       await client.query(
         `INSERT INTO student_profiles (user_id, degree, department, year_of_study,

@@ -48,11 +48,11 @@ export const auth = {
   switchDemoUser: async (idOrRole) => {
     const roleKey = typeof idOrRole === 'string' ? idOrRole.toUpperCase() : idOrRole?.role?.toUpperCase?.()
     const credentials = {
-      ADMIN: { email: 'admin@alumni.local', password: 'DevPassw0rd!' },
-      ALUMNI: { email: 'alumni@alumni.local', password: 'DevPassw0rd!' },
-      STUDENT: { email: 'student@alumni.local', password: 'DevPassw0rd!' },
-      PROFESSOR: { email: 'admin@alumni.local', password: 'DevPassw0rd!' },
-      FACULTY: { email: 'admin@alumni.local', password: 'DevPassw0rd!' },
+      ADMIN: { email: 'admin.demo@alumniportal.test', password: 'Demo@Portal2026!' },
+      ALUMNI: { email: 'alumni.demo@alumniportal.test', password: 'Demo@Portal2026!' },
+      STUDENT: { email: 'student.demo@alumniportal.test', password: 'Demo@Portal2026!' },
+      PROFESSOR: { email: 'prof.kulkarni@alumniportal.test', password: 'Demo@Portal2026!' },
+      FACULTY: { email: 'prof.kulkarni@alumniportal.test', password: 'Demo@Portal2026!' },
     }[roleKey]
 
     if (credentials) {

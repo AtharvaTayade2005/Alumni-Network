@@ -182,7 +182,7 @@ export default function Donations() {
                       amount === 'custom' ? 'font-bold text-swiss-text' : 'text-swiss-muted'
                     )}
                   >
-                    Or enter a custom amount &rarr;
+                    Or enter a custom amount →
                   </button>
 
                   {amount === 'custom' && (
@@ -223,7 +223,7 @@ export default function Donations() {
 
                 <div className="pt-4 border-t border-swiss-border flex flex-wrap items-center justify-between gap-4">
                   <Button type="submit" disabled={donating} size="lg">
-                    {donating ? <><Spinner /> PROCESSING GIFT...</> : 'COMPLETE CONTRIBUTION &rarr;'}
+                    {donating ? <><Spinner /> PROCESSING GIFT...</> : 'COMPLETE CONTRIBUTION →'}
                   </Button>
                   <p className="text-[10px] font-mono text-swiss-label uppercase tracking-widest">
                     SECURE SIMULATED 80G TRANSACTION

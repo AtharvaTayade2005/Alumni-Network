@@ -179,7 +179,7 @@ export default function Announcements() {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={saving}>
-                  {saving ? <><Spinner /> PUBLISHING...</> : 'PUBLISH ANNOUNCEMENT &rarr;'}
+                  {saving ? <><Spinner /> PUBLISHING...</> : 'PUBLISH ANNOUNCEMENT →'}
                 </Button>
               </div>
             </div>

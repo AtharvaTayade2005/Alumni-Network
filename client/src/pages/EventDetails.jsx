@@ -99,7 +99,7 @@ export default function EventDetails() {
             disabled={busy}
             onClick={handleRsvpToggle}
           >
-            {busy ? <Spinner /> : event.hasRsvpd ? '&check; RSVP CONFIRMED (CANCEL)' : 'CONFIRM RSVP &rarr;'}
+            {busy ? <Spinner /> : event.hasRsvpd ? '&check; RSVP CONFIRMED (CANCEL)' : 'CONFIRM RSVP →'}
           </Button>
         </div>
       </header>
@@ -127,7 +127,7 @@ export default function EventDetails() {
                     rel="noreferrer noopener"
                     className="inline-block font-mono text-xs text-blue-400 underline font-semibold"
                   >
-                    {event.virtualLink} &rarr;
+                    {event.virtualLink} →
                   </a>
                 </div>
               )}

@@ -164,16 +164,16 @@ export default function Home() {
         
         <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-12 font-mono text-xs uppercase tracking-widest text-swiss-muted">
           <span>RESUME</span>
-          <span className="hidden md:inline">&rarr;</span>
+          <span className="hidden md:inline">→</span>
           <span className="md:hidden">&darr;</span>
           <span>SKILLS</span>
-          <span className="hidden md:inline">&rarr;</span>
+          <span className="hidden md:inline">→</span>
           <span className="md:hidden">&darr;</span>
           <span>READINESS</span>
-          <span className="hidden md:inline">&rarr;</span>
+          <span className="hidden md:inline">→</span>
           <span className="md:hidden">&darr;</span>
           <span>OPPORTUNITIES</span>
-          <span className="hidden md:inline">&rarr;</span>
+          <span className="hidden md:inline">→</span>
           <span className="md:hidden">&darr;</span>
           <span>ROADMAP</span>
         </div>

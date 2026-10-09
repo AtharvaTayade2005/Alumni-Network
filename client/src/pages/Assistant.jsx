@@ -136,10 +136,10 @@ How can I assist your career journey today?`,
             NEW CHAT
           </Button>
           <Link to="/job-readiness">
-            <Button size="sm" variant="secondary">JOB READINESS &rarr;</Button>
+            <Button size="sm" variant="secondary">JOB READINESS →</Button>
           </Link>
           <Link to="/resume-analyzer">
-            <Button size="sm" variant="secondary">RESUME ANALYZER &rarr;</Button>
+            <Button size="sm" variant="secondary">RESUME ANALYZER →</Button>
           </Link>
         </div>
       </header>
@@ -256,7 +256,7 @@ How can I assist your career journey today?`,
                           <div className="pt-1">
                             <Link to={`/jobs/${j.id}`}>
                               <Button size="sm" variant="secondary" className="text-[10px] py-1 px-2">
-                                View Job &rarr;
+                                View Job →
                               </Button>
                             </Link>
                           </div>
@@ -301,7 +301,7 @@ How can I assist your career journey today?`,
                             </Link>
                             <Link to={`/messages/${p.id}`}>
                               <Button size="sm" variant="secondary" className="text-[10px] py-1 px-2">
-                                Message &rarr;
+                                Message →
                               </Button>
                             </Link>
                           </div>
@@ -319,7 +319,7 @@ How can I assist your career journey today?`,
                         return (
                           <Link key={idx} to={act.to}>
                             <Button size="sm" variant="secondary" className="text-[11px] font-mono">
-                              {act.label} &rarr;
+                              {act.label} →
                             </Button>
                           </Link>
                         )
@@ -332,7 +332,7 @@ How can I assist your career journey today?`,
                           disabled={loading}
                           className="px-2.5 py-1 text-[11px] font-mono rounded-xs border border-swiss-border hover:bg-swiss-surface-hover text-swiss-text transition-colors disabled:opacity-50"
                         >
-                          {act.label} &rarr;
+                          {act.label} →
                         </button>
                       )
                     })}
@@ -391,7 +391,7 @@ How can I assist your career journey today?`,
             disabled={loading}
           />
           <Button type="submit" disabled={!draft.trim() || loading}>
-            {loading ? <Spinner /> : 'SEND &rarr;'}
+            {loading ? <Spinner /> : 'SEND →'}
           </Button>
         </form>
       </Card>

@@ -132,10 +132,10 @@ export default function Dashboard() {
           {role === ROLES.STUDENT && (
             <>
               <Link to="/mentorship">
-                <Button variant="secondary">FIND A MENTOR &rarr;</Button>
+                <Button variant="secondary">FIND A MENTOR →</Button>
               </Link>
               <Link to="/jobs">
-                <Button>EXPLORE JOBS &rarr;</Button>
+                <Button>EXPLORE JOBS →</Button>
               </Link>
             </>
           )}
@@ -145,7 +145,7 @@ export default function Dashboard() {
                 <Button variant="secondary">+ POST A JOB</Button>
               </Link>
               <Link to="/donations">
-                <Button>GIVE BACK &rarr;</Button>
+                <Button>GIVE BACK →</Button>
               </Link>
             </>
           )}
@@ -155,7 +155,7 @@ export default function Dashboard() {
                 <Button variant="secondary">+ ANNOUNCEMENT</Button>
               </Link>
               <Link to="/students">
-                <Button>STUDENTS ROSTER &rarr;</Button>
+                <Button>STUDENTS ROSTER →</Button>
               </Link>
             </>
           )}
@@ -165,7 +165,7 @@ export default function Dashboard() {
                 <Button variant="secondary">VERIFICATIONS ({data.adminMetrics?.pendingVerifications || 0})</Button>
               </Link>
               <Link to="/admin/jobs">
-                <Button>MODERATE JOBS &rarr;</Button>
+                <Button>MODERATE JOBS →</Button>
               </Link>
             </>
           )}
@@ -221,7 +221,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="RECOMMENDED ALUMNI MENTORS"
                   description="Senior engineers and product leaders from your department open to 1-on-1 advising"
-                  actions={<Link to="/mentorship" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">VIEW ALL &rarr;</Link>}
+                  actions={<Link to="/mentorship" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">VIEW ALL →</Link>}
                 />
                 <div className="p-5 space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -238,7 +238,7 @@ export default function Dashboard() {
                         System design, distributed storage primitives, and resume critiques for aspiring engineers.
                       </p>
                       <Link to="/alumni/u_alumni_1">
-                        <Button size="sm" variant="secondary" className="w-full justify-center">VIEW PROFILE &rarr;</Button>
+                        <Button size="sm" variant="secondary" className="w-full justify-center">VIEW PROFILE →</Button>
                       </Link>
                     </div>
 
@@ -255,7 +255,7 @@ export default function Dashboard() {
                         Guiding students on breaking into APM programs, case interviews, and product leadership.
                       </p>
                       <Link to="/alumni/u_alumni_2">
-                        <Button size="sm" variant="secondary" className="w-full justify-center">VIEW PROFILE &rarr;</Button>
+                        <Button size="sm" variant="secondary" className="w-full justify-center">VIEW PROFILE →</Button>
                       </Link>
                     </div>
                   </div>
@@ -266,7 +266,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="RECOMMENDED JOBS & INTERNSHIPS"
                   description="High-affinity openings posted by verified alumni"
-                  actions={<Link to="/jobs" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">BROWSE ALL &rarr;</Link>}
+                  actions={<Link to="/jobs" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">BROWSE ALL →</Link>}
                 />
                 <div className="divide-y divide-swiss-border">
                   {data.recentJobs.slice(0, 3).map((job) => (
@@ -287,7 +287,7 @@ export default function Dashboard() {
                           <Badge tone="blue">APPLIED</Badge>
                         ) : (
                           <Link to={`/jobs/${job.id}`}>
-                            <Button size="sm">APPLY &rarr;</Button>
+                            <Button size="sm">APPLY →</Button>
                           </Link>
                         )}
                       </div>
@@ -305,7 +305,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="INCOMING MENTORSHIP REQUESTS"
                   description="Junior scholars seeking your industry expertise"
-                  actions={<Link to="/mentorship?tab=incoming" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">MANAGE ALL &rarr;</Link>}
+                  actions={<Link to="/mentorship?tab=incoming" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">MANAGE ALL →</Link>}
                 />
                 <div className="p-5">
                   {pendingRequestsCount === 0 ? (
@@ -322,7 +322,7 @@ export default function Dashboard() {
                           <p className="text-xs text-swiss-text italic border-l-2 border-swiss-border pl-2">&ldquo;{req.message}&rdquo;</p>
                           <div className="pt-2 flex gap-2">
                             <Link to="/mentorship?tab=incoming">
-                              <Button size="sm">REVIEW REQUEST &rarr;</Button>
+                              <Button size="sm">REVIEW REQUEST →</Button>
                             </Link>
                           </div>
                         </div>
@@ -336,7 +336,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="YOUR POSTED OPPORTUNITIES"
                   description="Manage job listings and review incoming candidates"
-                  actions={<Link to="/jobs" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">+ POST NEW &rarr;</Link>}
+                  actions={<Link to="/jobs" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">+ POST NEW →</Link>}
                 />
                 <div className="divide-y divide-swiss-border">
                   {data.recentJobs.slice(0, 2).map((job) => (
@@ -362,7 +362,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="STUDENTS SEEKING GUIDANCE"
                   description="Recent undergraduate project drafts and thesis advising requests"
-                  actions={<Link to="/students" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">STUDENT ROSTER &rarr;</Link>}
+                  actions={<Link to="/students" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">STUDENT ROSTER →</Link>}
                 />
                 <div className="divide-y divide-swiss-border">
                   <div className="p-5 flex items-center justify-between">
@@ -390,7 +390,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="DEPARTMENT ANNOUNCEMENTS"
                   description="Active broadcast bulletins to students and faculty"
-                  actions={<Link to="/announcements" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">MANAGE &rarr;</Link>}
+                  actions={<Link to="/announcements" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">MANAGE →</Link>}
                 />
                 <div className="p-5 space-y-3">
                   <div className="p-4 border border-swiss-border bg-swiss-surface rounded-sm">
@@ -412,7 +412,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="PENDING ALUMNI VERIFICATION QUEUE"
                   description="Graduates awaiting official alumni badge verification"
-                  actions={<Link to="/admin/verification" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">VERIFY ALL &rarr;</Link>}
+                  actions={<Link to="/admin/verification" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">VERIFY ALL →</Link>}
                 />
                 <div className="divide-y divide-swiss-border">
                   <div className="p-5 flex items-center justify-between gap-4">
@@ -424,7 +424,7 @@ export default function Dashboard() {
                       <p className="text-xs text-swiss-muted mt-0.5">B.Tech Computer Science (Class of 2022) · Frontend Engineer at Atlassian</p>
                     </div>
                     <Link to="/admin/verification">
-                      <Button size="sm">REVIEW CREDENTIALS &rarr;</Button>
+                      <Button size="sm">REVIEW CREDENTIALS →</Button>
                     </Link>
                   </div>
                 </div>
@@ -434,7 +434,7 @@ export default function Dashboard() {
                 <CardHeader
                   title="RECENT AUDIT TRAIL"
                   description="System security and administrative action logs"
-                  actions={<Link to="/admin/audit-logs" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">FULL LOG &rarr;</Link>}
+                  actions={<Link to="/admin/audit-logs" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">FULL LOG →</Link>}
                 />
                 <div className="divide-y divide-swiss-border font-mono text-xs">
                   <div className="p-4 flex items-center justify-between">
@@ -457,7 +457,7 @@ export default function Dashboard() {
             <CardHeader
               title="UPCOMING EVENTS"
               description="Campus reunions & technical workshops"
-              actions={<Link to="/events" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">ALL &rarr;</Link>}
+              actions={<Link to="/events" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">ALL →</Link>}
             />
             {data.upcomingEvents.length === 0 ? (
               <div className="p-6">
@@ -488,7 +488,7 @@ export default function Dashboard() {
           <Card>
             <CardHeader
               title="RECENT NOTIFICATIONS"
-              actions={<Link to="/notifications" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">ALL &rarr;</Link>}
+              actions={<Link to="/notifications" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">ALL →</Link>}
             />
             {data.recentNotifs.length === 0 ? (
               <div className="p-6">

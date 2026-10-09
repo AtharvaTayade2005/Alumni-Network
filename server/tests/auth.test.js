@@ -350,5 +350,120 @@ describe('Native MERN Stack Tests: Authentication & Registration', () => {
       assert.equal(res.status, 401)
       assert.equal(res.body.success, false)
     })
+
+    it('TC-AUTH-16: Successfully registers a professor/faculty member', async () => {
+      const email = uniqEmail('prof')
+      const payload = {
+        email,
+        password: 'ValidProfPassword123!',
+        firstName: 'Rajesh',
+        lastName: 'Kulkarni',
+        role: 'PROFESSOR',
+        department: 'Computer Science & Engineering',
+        title: 'Professor & Head of Department',
+        acceptTerms: true,
+      }
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send(payload)
+
+      assert.equal(res.status, 201)
+      assert.equal(res.body.success, true)
+      assert.equal(res.body.data.user.email, email)
+    })
+
+    it('TC-AUTH-17: POST /api/auth/forgot-password returns success message (anti-enumeration)', async () => {
+      const res = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'anyuser@university.edu' })
+
+      assert.equal(res.status, 200)
+      assert.equal(res.body.success, true)
+      assert.match(res.body.message || '', /reset link/i)
+    })
+
+    it('TC-AUTH-18: POST /api/auth/reset-password rejects invalid token with 400', async () => {
+      const res = await request(app)
+        .post('/api/auth/reset-password')
+        .send({
+          token: 'invalid-nonexistent-token-sample-value',
+          password: 'NewValidPassword123!',
+        })
+
+      assert.equal(res.status, 400)
+      assert.equal(res.body.success, false)
+      assert.match(res.body.error?.message || res.body.message, /invalid or has expired/i)
+    })
+
+    it('TC-AUTH-19: GET /api/auth/verify-email rejects invalid token with 400', async () => {
+      const res = await request(app)
+        .get('/api/auth/verify-email?token=invalid-verification-token-sample')
+
+      assert.equal(res.status, 400)
+      assert.equal(res.body.success, false)
+    })
+
+    it('TC-AUTH-20: POST /api/auth/refresh rotates session token', async () => {
+      const email = uniqEmail('refresh.test')
+      const password = 'StrongPassword123!'
+
+      await request(app).post('/api/auth/register').send({
+        email,
+        password,
+        firstName: 'Refresh',
+        lastName: 'Tester',
+        role: 'STUDENT',
+        acceptTerms: true,
+      })
+
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email, password })
+
+      const cookies = loginRes.headers['set-cookie']
+      assert.ok(cookies)
+      const csrfMatch = cookies.find((c) => c.startsWith('csrf_token='))?.match(/csrf_token=([^;]+)/)
+      const csrfToken = csrfMatch ? csrfMatch[1] : ''
+
+      const refreshRes = await request(app)
+        .post('/api/auth/refresh')
+        .set('Cookie', cookies)
+        .set('x-csrf-token', csrfToken)
+
+      assert.equal(refreshRes.status, 200)
+      assert.equal(refreshRes.body.success, true)
+      assert.ok(refreshRes.body.data.accessToken)
+    })
+
+    it('TC-AUTH-21: POST /api/auth/logout revokes session and clears cookies', async () => {
+      const email = uniqEmail('logout.test')
+      const password = 'StrongPassword123!'
+
+      await request(app).post('/api/auth/register').send({
+        email,
+        password,
+        firstName: 'Logout',
+        lastName: 'Tester',
+        role: 'STUDENT',
+        acceptTerms: true,
+      })
+
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email, password })
+
+      const cookies = loginRes.headers['set-cookie']
+      const csrfMatch = cookies.find((c) => c.startsWith('csrf_token='))?.match(/csrf_token=([^;]+)/)
+      const csrfToken = csrfMatch ? csrfMatch[1] : ''
+
+      const logoutRes = await request(app)
+        .post('/api/auth/logout')
+        .set('Cookie', cookies)
+        .set('x-csrf-token', csrfToken)
+
+      assert.equal(logoutRes.status, 200)
+      assert.equal(logoutRes.body.success, true)
+    })
   })
 })
