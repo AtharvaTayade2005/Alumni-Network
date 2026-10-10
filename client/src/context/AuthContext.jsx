@@ -2,6 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
 import { auth as authApi, notifications } from '../services/api.js'
+import { tokenStore } from '../services/http.js'
 import { getUserPrimaryRole } from '../utils/permissions.js'
 import { ROLES } from '../utils/roles.js'
 
@@ -16,15 +17,26 @@ export function AuthProvider({ children }) {
   const loadSession = useCallback(async () => {
     try {
       const res = await authApi.getSession()
-      setUser(res.data)
-      setStatus('authenticated')
+      if (res?.data && tokenStore.get()) {
+        setUser(res.data)
+        setStatus('authenticated')
+        setSessionError(null)
+      } else {
+        setUser(null)
+        setStatus('anonymous')
+      }
     } catch (err) {
+      setUser(null)
       setSessionError(err)
       setStatus('anonymous')
     }
   }, [])
 
   const loadUnread = useCallback(async () => {
+    if (!tokenStore.get()) {
+      setUnreadCount(0)
+      return
+    }
     try {
       const res = await notifications.unreadCount()
       setUnreadCount(res.data?.count ?? 0)
@@ -37,8 +49,19 @@ export function AuthProvider({ children }) {
     loadSession()
   }, [loadSession])
 
+  // Global listener for session expiration or unrecoverable 401
   useEffect(() => {
-    if (status === 'authenticated' && user) {
+    function handleUnauthorized() {
+      setUser(null)
+      setStatus('anonymous')
+      setUnreadCount(0)
+    }
+    window.addEventListener('auth:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized)
+  }, [])
+
+  useEffect(() => {
+    if (status === 'authenticated' && user && tokenStore.get()) {
       loadUnread()
       const timer = setInterval(loadUnread, 15000)
       return () => clearInterval(timer)
@@ -48,14 +71,17 @@ export function AuthProvider({ children }) {
   const switchDemoUser = useCallback(async (userIdOrRole) => {
     try {
       const res = await authApi.switchDemoUser(userIdOrRole)
-      setUser(res.data)
-      setStatus('authenticated')
-      setSessionError(null)
-      loadUnread()
-      return res.data
+      if (res?.data && tokenStore.get()) {
+        setUser(res.data)
+        setStatus('authenticated')
+        setSessionError(null)
+        loadUnread()
+        return res.data
+      }
+      return null
     } catch (err) {
       setSessionError(err)
-      setStatus(user ? 'authenticated' : 'anonymous')
+      setStatus(user && tokenStore.get() ? 'authenticated' : 'anonymous')
       return null
     }
   }, [loadUnread, user])
@@ -79,11 +105,18 @@ export function AuthProvider({ children }) {
   const register = useCallback(async (payload) => {
     try {
       const res = await authApi.register(payload)
-      setUser(res.data.user)
-      setStatus('authenticated')
-      setSessionError(null)
-      loadUnread()
-      return res.data.user
+      if (res.data?.accessToken) {
+        tokenStore.set(res.data.accessToken)
+        setUser(res.data.user)
+        setStatus('authenticated')
+        setSessionError(null)
+        loadUnread()
+      } else {
+        setUser(null)
+        setStatus('anonymous')
+        setSessionError(null)
+      }
+      return res.data
     } catch (err) {
       setUser(null)
       setStatus('anonymous')
@@ -96,6 +129,7 @@ export function AuthProvider({ children }) {
     try {
       await authApi.logout()
     } finally {
+      tokenStore.clear()
       setUser(null)
       setUnreadCount(0)
       setStatus('anonymous')
@@ -113,7 +147,7 @@ export function AuthProvider({ children }) {
     sessionError,
     unreadCount,
     refreshUnreadCount: loadUnread,
-    isAuthenticated: status === 'authenticated' && Boolean(user),
+    isAuthenticated: status === 'authenticated' && Boolean(user) && Boolean(tokenStore.get()),
     isLoading: status === 'loading',
     isStaff,
     switchDemoUser,

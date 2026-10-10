@@ -30,18 +30,23 @@ export class ApiError extends Error {
   }
 }
 
+let memoryToken = null
+
 export const tokenStore = {
   get: () => {
     try {
-      return sessionStorage.getItem(ACCESS_TOKEN_KEY)
+      return (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(ACCESS_TOKEN_KEY) : null) ?? memoryToken
     } catch {
-      return null
+      return memoryToken
     }
   },
   set: (token) => {
+    memoryToken = token || null
     try {
-      if (token) sessionStorage.setItem(ACCESS_TOKEN_KEY, token)
-      else sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+      if (typeof sessionStorage !== 'undefined') {
+        if (token) sessionStorage.setItem(ACCESS_TOKEN_KEY, token)
+        else sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+      }
     } catch {
       /* private browsing - the in-memory copy still works for this tab */
     }
@@ -78,7 +83,7 @@ async function parseBody(response) {
   }
 }
 
-function normalizeFields(errors) {
+export function normalizeFields(errors) {
   if (!errors) return {}
   if (Array.isArray(errors)) {
     const map = {}
@@ -172,10 +177,26 @@ async function send(path, { method = 'GET', body, params, signal, retry = true }
     throw new ApiError(0, 'Unable to connect to the server. Please ensure the backend is running.', { code: 'NETWORK_ERROR' })
   }
 
-  if (response.status === 401 && retry && !path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
+  const isPublicAuthPath = path.startsWith('/auth/login') ||
+    path.startsWith('/auth/register') ||
+    path.startsWith('/auth/forgot-password') ||
+    path.startsWith('/auth/reset-password') ||
+    path.startsWith('/auth/verify-email')
+
+  if (response.status === 401 && retry && !isPublicAuthPath) {
     const refreshed = await refreshAccessToken().catch(() => null)
     if (refreshed) return send(path, { method, body, params, signal, retry: false })
     tokenStore.clear()
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { path } }))
+    }
+  }
+
+  if (response.status === 401 && !isPublicAuthPath) {
+    tokenStore.clear()
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { path } }))
+    }
   }
 
   if (response.status === 204) return null

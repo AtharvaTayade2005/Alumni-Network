@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { Link } from 'react-router-dom'
 
 export function cx(...values) {
   return values.filter(Boolean).join(' ')
@@ -238,11 +239,44 @@ export function EmptyState({ title, description, action }) {
 }
 
 export function ErrorState({ error, onRetry }) {
+  const isAuth = error?.status === 401 ||
+    error?.code === 'UNAUTHORIZED' ||
+    error?.code === 'UNAUTHENTICATED' ||
+    error?.message?.toLowerCase?.().includes('token is missing') ||
+    error?.message?.toLowerCase?.().includes('session is no longer valid')
+
+  const isForbidden = error?.status === 403 || error?.code === 'FORBIDDEN'
+  const isNotFound = error?.status === 404 || error?.code === 'NOT_FOUND'
+  const isNetwork = error?.status === 0 || error?.code === 'NETWORK_ERROR'
+
+  let title = error?.code || 'ERR_REQUEST_FAILED'
+  let description = error?.message ?? 'An unexpected error occurred.'
+
+  if (isAuth) {
+    title = 'AUTHENTICATION_REQUIRED'
+    description = error?.message || 'Your session has expired or authentication is required. Please sign in to continue.'
+  } else if (isForbidden) {
+    title = 'ACCESS_DENIED'
+    description = error?.message || 'You do not have permission to view or modify this resource.'
+  } else if (isNotFound) {
+    title = 'NOT_FOUND'
+  } else if (isNetwork) {
+    title = 'NETWORK_ERROR'
+  }
+
+  const action = isAuth ? (
+    <Link to="/login">
+      <Button>SIGN IN →</Button>
+    </Link>
+  ) : onRetry ? (
+    <Button variant="secondary" onClick={onRetry}>RETRY</Button>
+  ) : null
+
   return (
     <EmptyState
-      title="ERR_UNEXPECTED"
-      description={error?.message ?? 'An unexpected error occurred.'}
-      action={onRetry ? <Button variant="secondary" onClick={onRetry}>RETRY</Button> : null}
+      title={title}
+      description={description}
+      action={action}
     />
   )
 }

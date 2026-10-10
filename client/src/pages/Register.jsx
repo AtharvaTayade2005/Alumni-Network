@@ -28,6 +28,7 @@ export default function Register() {
   const [form, setForm] = useState(initial)
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [createdUser, setCreatedUser] = useState(null)
 
   const isAlumni = form.role === 'ALUMNI'
   const isStudent = form.role === 'STUDENT'
@@ -88,13 +89,54 @@ export default function Register() {
 
     setSubmitting(true)
     try {
-      await register(payload)
-      navigate('/dashboard', { replace: true })
+      const res = await register(payload)
+      if (res?.accessToken) {
+        navigate('/dashboard', { replace: true })
+      } else {
+        setCreatedUser({
+          email: form.email.trim().toLowerCase(),
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+        })
+      }
     } catch (caught) {
       setError(caught)
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (createdUser) {
+    return (
+      <div className="mx-auto max-w-xl py-12">
+        <Card className="p-8 text-center border-emerald-500/30">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 mb-5">
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase mb-2">AUTH &mdash; 02 COMPLETE</p>
+          <h1 className="text-2xl font-bold tracking-tight text-swiss-text">ACCOUNT CREATED</h1>
+          <p className="mt-3 text-sm text-swiss-muted leading-relaxed">
+            Welcome, <strong className="text-swiss-text">{createdUser.firstName}</strong>. Your account for{' '}
+            <strong className="text-swiss-text font-mono">{createdUser.email}</strong> has been successfully registered.
+          </p>
+          <div className="mt-5 p-4 rounded-sm bg-swiss-surface-hover border border-swiss-border text-left">
+            <p className="font-mono text-[10px] text-swiss-label uppercase tracking-widest mb-1">NEXT STEP:</p>
+            <p className="text-xs text-swiss-muted leading-relaxed">
+              A verification link has been queued for your email address. You can now sign in with your credentials to access the portal.
+            </p>
+          </div>
+          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+            <Link to="/login" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full">
+                PROCEED TO SIGN IN →
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   return (

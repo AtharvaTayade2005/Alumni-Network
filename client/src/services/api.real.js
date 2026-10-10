@@ -56,16 +56,15 @@ export const auth = {
     }[roleKey]
 
     if (credentials) {
-      try {
-        const res = await api.post('/auth/login', credentials)
-        if (res?.data?.accessToken) api.tokenStore.set(res.data.accessToken)
-        const user = res?.data?.user ? normalizeUser(res.data.user) : normalizeUser(res?.data)
-        return { ...res, data: user }
-      } catch {
-        // Fall back to me
-      }
+      const res = await api.post('/auth/login', credentials)
+      if (res?.data?.accessToken) api.tokenStore.set(res.data.accessToken)
+      const user = res?.data?.user ? normalizeUser(res.data.user) : normalizeUser(res?.data)
+      return { ...res, data: user }
     }
-    return auth.me()
+    if (api.tokenStore.get()) {
+      return auth.me()
+    }
+    return { data: null }
   },
   getDemoUsers: async () => api.get('/admin/users'),
 }
