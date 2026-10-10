@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { events } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
@@ -16,7 +16,6 @@ const TABS = [
 
 export default function Events() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('upcoming')
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)

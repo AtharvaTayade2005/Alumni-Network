@@ -11,7 +11,6 @@ import {
   getAlumniRecommendations,
   getMentorRecommendations,
   getJobRecommendations,
-  getNetworkContextForUser,
 } from './retrievalService.js'
 import {
   getSkillsForUser,
@@ -36,7 +35,6 @@ import {
   getCompletedTasksForUser,
 } from '../../models/roadmapModel.js'
 import * as fileService from '../fileService.js'
-import { getStorageDriver } from '../storageService.js'
 import { notFound, unprocessable } from '../../utils/errors.js'
 
 /**
@@ -854,7 +852,7 @@ export const aiService = {
   /**
    * Retrieves verified platform learning resources
    */
-  async getResources({ user, targetRole }) {
+  async getResources({ user: _user, targetRole }) {
     return getPlatformResources({ targetRole })
   },
 }

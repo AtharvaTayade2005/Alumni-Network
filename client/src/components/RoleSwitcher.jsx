@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { ROLES, ROLE_LABELS, ROLE_BADGE_TONES } from '../utils/roles.js'
-import { Badge, Button, cx } from './ui.jsx'
+import { Badge, cx } from './ui.jsx'
 
 export default function RoleSwitcher() {
   const { user, role, switchDemoUser } = useAuth()
   const navigate = useNavigate()
-  const [isOpen, setIsOpen] = useState(false)
   const [switching, setSwitching] = useState(false)
 
   const roles = [
@@ -20,9 +19,8 @@ export default function RoleSwitcher() {
   async function handleSwitch(roleId) {
     if (switching) return
     setSwitching(true)
-    const newUser = await switchDemoUser(roleId)
+    await switchDemoUser(roleId)
     setSwitching(false)
-    setIsOpen(false)
 
     // Redirect to default dashboard for the switched role
     if (roleId === ROLES.ADMIN) {

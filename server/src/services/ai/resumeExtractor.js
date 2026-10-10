@@ -1,3 +1,24 @@
+// Polyfill standard DOM globals expected by pdfjs-dist (bundled in pdf-parse) in Node 22+
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  globalThis.DOMMatrix = class DOMMatrix {
+    constructor() {
+      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0
+    }
+  }
+}
+if (typeof globalThis.ImageData === 'undefined') {
+  globalThis.ImageData = class ImageData {
+    constructor(width = 0, height = 0) {
+      this.width = width
+      this.height = height
+      this.data = new Uint8ClampedArray(width * height * 4)
+    }
+  }
+}
+if (typeof globalThis.Path2D === 'undefined') {
+  globalThis.Path2D = class Path2D {}
+}
+
 import { createRequire } from 'node:module'
 import config from '../../config/env.js'
 import { unprocessable } from '../../utils/errors.js'

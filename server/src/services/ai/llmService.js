@@ -21,7 +21,7 @@ export async function generateText({ prompt, systemInstruction } = {}) {
  * Generates structured JSON output from the model.
  * Performs robust parsing and markdown-fence stripping.
  */
-export async function generateStructured({ prompt, systemInstruction, fallback = {} } = {}) {
+export async function generateStructured({ prompt, systemInstruction, fallback: _fallback = {} } = {}) {
   try {
     const provider = getAiProvider()
     return await provider.generateStructured(prompt, systemInstruction)

@@ -1,7 +1,4 @@
 import { ROLES } from '../utils/roles.js'
-import { mockStudents } from './students.js'
-import { mockAlumni } from './alumni.js'
-import { mockProfessors } from './professors.js'
 
 export const mockUsers = [
   // Students

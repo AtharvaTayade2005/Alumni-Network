@@ -46,7 +46,7 @@ export const mentorshipService = {
     }
   },
 
-  async getRequests(params = {}) {
+  async getRequests() {
     await delay()
     const session = await authService.getSession()
     const currentUserId = session.data.id

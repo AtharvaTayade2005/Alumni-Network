@@ -180,7 +180,7 @@ export const jobsService = {
     return { message: 'Job removed from saved list' }
   },
 
-  async saved(params = {}) {
+  async saved() {
     await delay()
     const session = await authService.getSession()
     const userId = session.data.id

@@ -509,7 +509,7 @@ export async function getMentorRecommendations({ userId, queryText = '', skills 
 /**
  * Retrieves real active jobs from PostgreSQL matching user query or skills.
  */
-export async function getJobRecommendations({ userId, queryText = '', skills = [], limit = 3 } = {}) {
+export async function getJobRecommendations({ userId: _userId, queryText = '', skills = [], limit = 3 } = {}) {
   try {
     const { rows } = await query(
       `SELECT j.id, j.title, j.company_name, j.description, j.location, j.work_mode, j.employment_type,

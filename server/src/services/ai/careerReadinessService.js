@@ -1,5 +1,5 @@
 import { query } from '../../config/database.js'
-import { getRoleBenchmark, SKILL_CATEGORIES } from './skillTaxonomy.js'
+import { getRoleBenchmark } from './skillTaxonomy.js'
 
 /**
  * Technical Career Readiness & Skill Gap Calculation Engine
@@ -10,8 +10,8 @@ export function calculateReadinessScore({
   roleBenchmark,
   jobRecord = null,
   candidateSkills = [],
-  verifiedSkills = [],
-  claimedSkills = [],
+  verifiedSkills: _verifiedSkills = [],
+  claimedSkills: _claimedSkills = [],
   experienceEntries = [],
   educationEntries = [],
   studentProfile = null,
@@ -215,7 +215,7 @@ export function reconcileRoadmapTasks(newTasks = [], previouslyCompletedTasks = 
 /**
  * Retrieves real platform learning resources (verified mentors and active events)
  */
-export async function getPlatformResources({ targetRole = '' }) {
+export async function getPlatformResources({ targetRole: _targetRole = '' } = {}) {
   let recommendedMentors = []
   let recommendedEvents = []
 

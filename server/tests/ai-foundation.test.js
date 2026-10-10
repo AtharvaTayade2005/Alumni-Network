@@ -113,7 +113,7 @@ async function createJobPosting({
   companyName = 'Google',
   description = 'Build scalable distributed systems with Node.js and PostgreSQL.',
   location = 'Bangalore, India',
-  status = 'published',
+  status: _status = 'published',
   postedBy,
 } = {}) {
   const posterId = postedBy || (await createAlumniUser({ firstName: 'Poster', lastName: 'Alum' })).id

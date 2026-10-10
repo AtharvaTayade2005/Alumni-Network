@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   profiles, jobs, mentorship, events, donations, admin, notifications
 } from '../services/api.js'
 import { ROLES, ROLE_LABELS } from '../utils/roles.js'
 import {
-  Avatar, Badge, Button, Card, CardHeader, EmptyState, ErrorState, LoadingBlock,
-  cx
+  Avatar, Badge, Button, Card, CardHeader, EmptyState, ErrorState, LoadingBlock
 } from '../components/ui.jsx'
 
 function StatTile({ label, value, hint, to }) {
@@ -34,7 +33,6 @@ function StatTile({ label, value, hint, to }) {
 
 export default function Dashboard() {
   const { user, role } = useAuth()
-  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [data, setData] = useState({

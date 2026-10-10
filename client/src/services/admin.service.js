@@ -1,5 +1,4 @@
 import { db } from '../data/index.js'
-import { authService } from './auth.service.js'
 
 const delay = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms))
 

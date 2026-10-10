@@ -4,7 +4,7 @@ import { resumes, ai } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Badge, Button, Card, CardHeader, EmptyState, ErrorState, Field,
-  Input, LoadingBlock, Spinner, cx
+  Input, LoadingBlock, Spinner
 } from '../components/ui.jsx'
 
 export default function Resume() {
@@ -72,7 +72,7 @@ export default function Resume() {
     try {
       const res = await ai.analyzeResume(resume.previewText)
       setAiAnalysis(res.data)
-    } catch (err) {
+    } catch {
       setMessage({ tone: 'error', text: 'AI analysis failed. Try again.' })
     } finally {
       setAnalyzing(false)

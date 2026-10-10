@@ -57,7 +57,10 @@ async function run() {
   assert.equal(eventsRes.status, 200)
   console.log('  ✔ Events loaded, count:', eventsRes.body.data?.length ?? 0)
 
-  let testEventId = eventsRes.body.data?.[0]?.id
+  const upcomingEvent = eventsRes.body.data?.find(
+    (e) => new Date(e.startTime || e.start_time) > new Date()
+  ) || eventsRes.body.data?.[0]
+  let testEventId = upcomingEvent?.id
   if (testEventId) {
     const rsvpRes = await request(`/events/${testEventId}/rsvp`, {
       method: 'POST',

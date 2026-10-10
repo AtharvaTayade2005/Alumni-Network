@@ -30,7 +30,7 @@ export class TestProvider {
     return true
   }
 
-  async generateText(promptOrOpts, maybeSystemInstruction) {
+  async generateText(promptOrOpts, _maybeSystemInstruction) {
     const prompt = String(typeof promptOrOpts === 'object' && promptOrOpts !== null ? promptOrOpts.prompt : promptOrOpts || '')
     const lower = prompt.toLowerCase()
 
@@ -62,7 +62,7 @@ export class TestProvider {
     return `As your Career Advisor, I recommend strengthening core system fundamentals, building end-to-end fullstack projects, and networking with alumni in your target industry.`
   }
 
-  async generateStructured(promptOrOpts, maybeSystemInstruction) {
+  async generateStructured(promptOrOpts, _maybeSystemInstruction) {
     const prompt = String(typeof promptOrOpts === 'object' && promptOrOpts !== null ? promptOrOpts.prompt : promptOrOpts || '')
     const schemaName = typeof promptOrOpts === 'object' && promptOrOpts !== null ? promptOrOpts.schemaName : 'response'
     const isResume = schemaName === 'resume_analysis' || prompt.includes('UNTRUSTED_RESUME_CONTENT') || prompt.includes('ATS scan') || prompt.includes('Resume Text')

@@ -10,7 +10,7 @@
 import 'dotenv/config'
 import bcrypt from 'bcrypt'
 import config from '../config/env.js'
-import { query, closePool, withTransaction } from '../config/database.js'
+import { closePool, withTransaction } from '../config/database.js'
 import { ensureDevDatabase } from '../config/devDbAutoStart.js'
 import logger from '../utils/logger.js'
 

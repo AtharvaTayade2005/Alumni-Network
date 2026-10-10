@@ -36,7 +36,6 @@ How can I assist your career journey today?`,
     },
   ])
   const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState(null)
   const endRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -58,7 +57,6 @@ How can I assist your career journey today?`,
         recommendations: null,
       },
     ])
-    setErrorMsg(null)
     setDraft('')
     inputRef.current?.focus()
   }
@@ -67,7 +65,6 @@ How can I assist your career journey today?`,
     const text = (textToSend || draft).trim()
     if (!text || loading) return
 
-    setErrorMsg(null)
     const userMsg = { id: Date.now(), role: 'user', text }
     setMessages((prev) => [...prev, userMsg])
     setDraft('')
@@ -96,7 +93,6 @@ How can I assist your career journey today?`,
       } else if (err?.status === 503) {
         friendlyError = 'The AI advisory service is currently unavailable. Please verify connection and retry.'
       }
-      setErrorMsg(friendlyError)
       setMessages((prev) => [
         ...prev,
         {

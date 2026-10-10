@@ -13,6 +13,10 @@ export function getAiProvider(forcedType = null) {
 
   const type = (forcedType || config.ai.provider || 'gemini').toLowerCase()
 
+  if (cachedProvider && cachedProvider._type === type) {
+    return cachedProvider
+  }
+
   if (type === 'test') {
     if (config.isProduction) {
       throw new AppError(500, 'Test AI provider is disabled in production. Configure a valid AI provider (gemini or openai).')
@@ -21,11 +25,15 @@ export function getAiProvider(forcedType = null) {
   }
 
   if (type === 'gemini') {
-    return new GeminiProvider()
+    cachedProvider = new GeminiProvider()
+    cachedProvider._type = 'gemini'
+    return cachedProvider
   }
 
   if (type === 'openai') {
-    return new OpenAIProvider()
+    cachedProvider = new OpenAIProvider()
+    cachedProvider._type = 'openai'
+    return cachedProvider
   }
 
   throw new AppError(500, `Unsupported AI provider configured: "${type}". Supported providers are "gemini" and "openai".`)

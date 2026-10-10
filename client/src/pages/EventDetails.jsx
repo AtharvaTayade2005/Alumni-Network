@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { events } from '../services/api.js'
 import {
   Alert, Badge, Button, Card, CardHeader, EmptyState, ErrorState, LoadingBlock,
-  Spinner, cx
+  Spinner
 } from '../components/ui.jsx'
 
 export default function EventDetails() {
