@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  profiles, jobs, mentorship, events, donations, admin, notifications
+  profiles, jobs, mentorship, events, donations, admin, notifications, announcements
 } from '../services/api.js'
 import { ROLES, ROLE_LABELS } from '../utils/roles.js'
 import {
@@ -46,6 +46,7 @@ export default function Dashboard() {
     adminMetrics: null,
     donationHistory: [],
     recommendedMentors: [],
+    announcements: [],
   })
 
   async function loadDashboard() {
@@ -63,6 +64,7 @@ export default function Dashboard() {
         metricsRes,
         donationsRes,
         mentorsRes,
+        annRes,
       ] = await Promise.all([
         profiles.me(),
         jobs.list({ limit: 4 }),
@@ -74,6 +76,7 @@ export default function Dashboard() {
         role === ROLES.ADMIN ? admin.metrics() : Promise.resolve({ data: null }),
         role === ROLES.ALUMNI ? donations.history(user?.id) : Promise.resolve({ data: [] }),
         role === ROLES.STUDENT ? mentorship.mentors({ limit: 4 }) : Promise.resolve({ data: [] }),
+        announcements.list({ limit: 3 }).catch(() => ({ data: [] })),
       ])
 
       setData({
@@ -87,6 +90,7 @@ export default function Dashboard() {
         adminMetrics: metricsRes.data,
         donationHistory: donationsRes.data || [],
         recommendedMentors: mentorsRes.data || [],
+        announcements: annRes.data || [],
       })
       setLoading(false)
     } catch (err) {
@@ -156,7 +160,7 @@ export default function Dashboard() {
           )}
           {role === ROLES.PROFESSOR && (
             <>
-              <Link to="/announcements">
+              <Link to="/announcements?create=true">
                 <Button variant="secondary">+ ANNOUNCEMENT</Button>
               </Link>
               <Link to="/students">
@@ -199,9 +203,9 @@ export default function Dashboard() {
 
         {role === ROLES.PROFESSOR && (
           <>
-            <StatTile label="Students Guided" value={professor?.totalStudentsGuided || 42} hint="Undergraduate advising" to="/students" />
-            <StatTile label="Alumni Connections" value={professor?.activeAlumniConnections || 89} hint="In department network" to="/directory" />
-            <StatTile label="Department Bulletins" value={3} hint="Active campus notices" to="/announcements" />
+            <StatTile label="Students Guided" value={activeMentorshipsCount} hint="Active mentees" to="/mentorship?tab=active" />
+            <StatTile label="Advising Requests" value={pendingRequestsCount} hint="Pending student inquiries" to="/mentorship?tab=incoming" />
+            <StatTile label="Department Bulletins" value={data.announcements.length} hint="Active campus notices" to="/announcements" />
             <StatTile label="Upcoming Seminars" value={data.upcomingEvents.length} hint="Scheduled events" to="/events" />
           </>
         )}
@@ -369,28 +373,52 @@ export default function Dashboard() {
                 <CardHeader
                   title="STUDENTS SEEKING GUIDANCE"
                   description="Recent undergraduate project drafts and thesis advising requests"
-                  actions={<Link to="/students" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">STUDENT ROSTER →</Link>}
+                  actions={<Link to="/mentorship?tab=incoming" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">MANAGE ALL →</Link>}
                 />
-                <div className="divide-y divide-swiss-border">
-                  <div className="p-5 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-sm text-swiss-text">Riya Shah</p>
-                      <p className="text-xs text-swiss-muted">3rd Year B.Tech CSE · Distributed Systems Research</p>
-                    </div>
-                    <Link to="/students">
-                      <Button size="sm">STUDENT PROFILE</Button>
-                    </Link>
+                {data.mentorshipRequests.filter((r) => r.direction === 'incoming' && (r.status === 'pending' || r.status === 'PENDING')).length === 0 ? (
+                  <div className="p-6">
+                    <EmptyState
+                      title="NO PENDING REQUESTS"
+                      description="You have responded to all incoming advising requests. Check the student roster to explore students."
+                      action={<Link to="/students"><Button variant="secondary" size="sm">STUDENT ROSTER →</Button></Link>}
+                    />
                   </div>
-                  <div className="p-5 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-sm text-swiss-text">Dev Patel</p>
-                      <p className="text-xs text-swiss-muted">4th Year B.Tech IT · Deepfake Video Detection Thesis</p>
-                    </div>
-                    <Link to="/students">
-                      <Button size="sm">STUDENT PROFILE</Button>
-                    </Link>
+                ) : (
+                  <div className="divide-y divide-swiss-border">
+                    {data.mentorshipRequests
+                      .filter((r) => r.direction === 'incoming' && (r.status === 'pending' || r.status === 'PENDING'))
+                      .slice(0, 4)
+                      .map((req) => (
+                        <div key={req.id} className="p-5 flex flex-wrap items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-swiss-text">{req.peer?.name || 'Student'}</span>
+                              <Badge tone="amber">PENDING REPLY</Badge>
+                            </div>
+                            <p className="text-xs text-swiss-muted">
+                              {req.peer?.currentCompany || 'Enrolled Student'} · {req.areaOfInterest || req.careerGoal}
+                            </p>
+                            {req.message && (
+                              <p className="text-xs text-swiss-muted italic line-clamp-1 border-l-2 border-swiss-border pl-2">
+                                &ldquo;{req.message}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Link to="/mentorship?tab=incoming">
+                              <Button size="sm">REVIEW REQUEST →</Button>
+                            </Link>
+                            {req.peer?.id && (
+                              <Link to={`/messages/${req.peer.id}`}>
+                                <Button size="sm" variant="ghost">MESSAGE</Button>
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
                   </div>
-                </div>
+                )}
               </Card>
 
               <Card>
@@ -399,15 +427,36 @@ export default function Dashboard() {
                   description="Active broadcast bulletins to students and faculty"
                   actions={<Link to="/announcements" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">MANAGE →</Link>}
                 />
-                <div className="p-5 space-y-3">
-                  <div className="p-4 border border-swiss-border bg-swiss-surface rounded-sm">
-                    <Badge tone="blue">ALL STUDENTS</Badge>
-                    <h4 className="font-bold text-sm text-swiss-text mt-1.5">
-                      Call for Papers: Departmental Research Symposium 2026
-                    </h4>
-                    <p className="text-xs text-swiss-muted mt-1">Abstract submission deadline: Oct 20, 2026</p>
+                {data.announcements.length === 0 ? (
+                  <div className="p-6">
+                    <EmptyState
+                      title="NO CAMPUS BULLETINS"
+                      description="No official department bulletins currently active."
+                      action={<Link to="/announcements?create=true"><Button size="sm">+ CREATE ANNOUNCEMENT</Button></Link>}
+                    />
                   </div>
-                </div>
+                ) : (
+                  <div className="p-5 space-y-3">
+                    {data.announcements.slice(0, 3).map((ann) => (
+                      <div key={ann.id} className="p-4 border border-swiss-border bg-swiss-surface rounded-sm space-y-1.5 hover:bg-swiss-surface-hover transition-colors">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {ann.isPinned && <Badge tone="amber">PINNED</Badge>}
+                          <Badge tone="blue">{ann.targetAudienceLabel || ann.targetAudience}</Badge>
+                          <Badge tone="slate">{ann.department}</Badge>
+                        </div>
+                        <Link to="/announcements" className="font-bold text-sm text-swiss-text block hover:underline">
+                          {ann.title}
+                        </Link>
+                        <p className="text-xs text-swiss-muted line-clamp-2">
+                          {ann.content}
+                        </p>
+                        <p className="font-mono text-[10px] text-swiss-label pt-1">
+                          By {ann.authorName} · {ann.publishedAt ? new Date(ann.publishedAt).toLocaleDateString() : 'Draft'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             </>
           )}

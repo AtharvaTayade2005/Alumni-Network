@@ -151,13 +151,14 @@ export async function searchDirectory(filters, viewerId = null) {
   )
 
   const userIds = rows.map((r) => r.id)
+  const effectiveViewerId = viewerId || filters.viewerId || null
   const [skillMap, connectionMap] = await Promise.all([
     getSkillMap(userIds),
-    getConnectionMap(userIds, viewerId),
+    getConnectionMap(userIds, effectiveViewerId),
   ])
 
   return {
-    rows: rows.map((r) => shapeDirectoryRow(r, skillMap, connectionMap, viewerId)),
+    rows: rows.map((r) => shapeDirectoryRow(r, skillMap, connectionMap, effectiveViewerId)),
     total: countRows[0].total,
   }
 }

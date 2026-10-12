@@ -133,8 +133,22 @@ export const messages = {
 
 export const mentorship = {
   mentors: (params) => api.get('/mentorship/mentors', { params }),
-  requests: (params) => api.get('/mentorship/requests', { params }),
-  mentorships: (params) => api.get('/mentorship/mentorships', { params }),
+  requests: async (params) => {
+    const res = await api.get('/mentorship/requests', { params })
+    const list = Array.isArray(res.data) ? res.data.map((r) => ({
+      ...r,
+      status: (r.status || '').toLowerCase(),
+    })) : []
+    return { ...res, data: list }
+  },
+  mentorships: async (params) => {
+    const res = await api.get('/mentorship/mentorships', { params })
+    const list = Array.isArray(res.data) ? res.data.map((m) => ({
+      ...m,
+      status: (m.status || '').toLowerCase(),
+    })) : []
+    return { ...res, data: list }
+  },
   request: (payload) => api.post('/mentorship/requests', payload),
   respond: (requestId, payload) => api.patch(`/mentorship/requests/${requestId}`, payload),
   cancel: (requestId) => api.delete(`/mentorship/requests/${requestId}`),
@@ -179,11 +193,16 @@ function normalizeEvent(evt) {
   const hasRsvpd = evt.hasRsvpd !== undefined
     ? evt.hasRsvpd
     : Boolean(evt.myRsvp && (evt.myRsvp.status === 'GOING' || evt.myRsvp.status === 'going'))
+  const end = evt.endTime ? new Date(evt.endTime) : null
+  const organizerName = typeof evt.organizer === 'object' ? (evt.organizer?.name || 'Alumni Relations') : (evt.organizer || 'Alumni Relations')
   return {
     ...evt,
-    date: evt.date || start.toISOString().split('T')[0],
-    time: evt.time || start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    location: evt.location || evt.venue || (evt.virtualUrl ? 'Virtual' : 'Campus Auditorium'),
+    organizer: organizerName,
+    organizerRaw: evt.organizer,
+    date: evt.date || (!isNaN(start.getTime()) ? start.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+    time: evt.time || (!isNaN(start.getTime()) ? start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM'),
+    endTime: evt.endTimeFormatted || (end && !isNaN(end.getTime()) ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (evt.endTime || '12:00 PM')),
+    location: evt.location || evt.venue || (evt.virtualUrl ? 'Virtual Meeting' : 'Campus Auditorium'),
     isVirtual: evt.isVirtual !== undefined ? evt.isVirtual : Boolean(evt.virtualUrl),
     capacity: evt.capacity || evt.maxAttendees || 100,
     attendeesCount: evt.attendeesCount ?? evt.attendeeCount ?? evt.rsvpCount ?? 0,
@@ -470,4 +489,8 @@ export const oauth = {
   unlink: (provider) => api.delete(`/auth/oauth/${provider}/link`),
   startUrl: (provider, params = {}) => api.url(`/auth/oauth/${provider}`, params),
   linkUrl: (provider, params = {}) => api.url(`/auth/oauth/${provider}/link`, params),
+}
+
+export const professor = {
+  analytics: () => api.get('/professor/analytics'),
 }

@@ -1,13 +1,21 @@
 import { forbidden, unauthorized } from '../utils/errors.js'
 
-export const ROLES = { ADMIN: 'ADMIN', ALUMNI: 'ALUMNI', STUDENT: 'STUDENT', MODERATOR: 'MODERATOR' }
+export const ROLES = {
+  ADMIN: 'ADMIN',
+  ALUMNI: 'ALUMNI',
+  STUDENT: 'STUDENT',
+  MODERATOR: 'MODERATOR',
+  PROFESSOR: 'PROFESSOR',
+  FACULTY: 'FACULTY',
+}
 
 export function hasRole(user, role) {
   return Boolean(user?.roles?.includes(role))
 }
 
-export function hasAnyRole(user, roles) {
-  return roles.some((role) => hasRole(user, role))
+export function hasAnyRole(user, ...roles) {
+  const list = roles.flat()
+  return list.some((role) => hasRole(user, role))
 }
 
 /**

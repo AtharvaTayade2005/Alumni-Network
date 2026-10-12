@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { announcements } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Badge, Button, Card, CardHeader, EmptyState, ErrorState, Field,
-  Input, Select, Textarea, Spinner, cx
+  Input, LoadingBlock, Select, Textarea, Spinner, cx
 } from '../components/ui.jsx'
 
 export default function Announcements() {
   const { user } = useAuth()
+  const location = useLocation()
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(location.search.includes('create=true'))
   const [message, setMessage] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
@@ -23,6 +25,12 @@ export default function Announcements() {
   const [status, setStatus] = useState('published')
   const [isPinned, setIsPinned] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (location.search.includes('create=true')) {
+      setCreating(true)
+    }
+  }, [location.search])
 
   async function loadAnnouncements() {
     setLoading(true)
@@ -80,6 +88,9 @@ export default function Announcements() {
     }
   }
 
+  const canCreate = user?.roles?.some((r) => ['PROFESSOR', 'FACULTY', 'ADMIN'].includes(r)) ||
+    ['professor', 'admin'].includes(user?.role)
+
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -94,9 +105,11 @@ export default function Announcements() {
             Broadcast official notices, research symposium calls, career clinics, and department bulletins across the alumni and student body.
           </p>
         </div>
-        <Button onClick={() => setCreating(!creating)}>
-          {creating ? 'CANCEL' : '+ CREATE ANNOUNCEMENT'}
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setCreating(!creating)}>
+            {creating ? 'CANCEL' : '+ CREATE ANNOUNCEMENT'}
+          </Button>
+        )}
       </header>
 
       {message && (
@@ -105,7 +118,7 @@ export default function Announcements() {
         </Alert>
       )}
 
-      {creating && (
+      {creating && canCreate && (
         <Card className="border-2 border-swiss-text">
           <CardHeader
             title="DRAFT NEW ANNOUNCEMENT"

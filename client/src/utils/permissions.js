@@ -101,6 +101,7 @@ export function getRoleNavigation(role) {
         { to: '/mentorship', label: 'Find a Mentor' },
         { to: '/jobs', label: 'Jobs & Internships' },
         { to: '/resume', label: 'Resume' },
+        { to: '/announcements', label: 'Campus Announcements' },
         { to: '/events', label: 'Events' },
         { to: '/messages', label: 'Messages' },
         { to: '/notifications', label: 'Notifications', badge: 'unread' },
@@ -114,6 +115,7 @@ export function getRoleNavigation(role) {
         { to: '/mentorship', label: 'Mentorship' },
         { to: '/jobs', label: 'Jobs' },
         { to: '/events', label: 'Events' },
+        { to: '/announcements', label: 'Campus Announcements' },
         { to: '/donations', label: 'Donations' },
         { to: '/messages', label: 'Messages' },
         { to: '/notifications', label: 'Notifications', badge: 'unread' },
@@ -123,14 +125,14 @@ export function getRoleNavigation(role) {
     case ROLES.PROFESSOR:
       return [
         { to: '/dashboard', label: 'Dashboard' },
-        { to: '/students', label: 'Students' },
-        { to: '/directory', label: 'Alumni Directory' },
-        { to: '/mentorship', label: 'Mentorship' },
-        { to: '/jobs', label: 'Opportunities' },
-        { to: '/announcements', label: 'Announcements' },
-        { to: '/events', label: 'Events' },
+        { to: '/students', label: 'Student Roster' },
+        { to: '/mentorship?tab=incoming', label: 'Mentorship Requests' },
+        { to: '/mentorship?tab=active', label: 'My Mentorships' },
+        { to: '/announcements', label: 'Department Announcements' },
+        { to: '/events', label: 'Events & Seminars' },
         { to: '/messages', label: 'Messages' },
         { to: '/notifications', label: 'Notifications', badge: 'unread' },
+        { to: '/students?tab=analytics', label: 'Student Analytics' },
         { to: '/profile', label: 'My Profile' },
       ]
     case ROLES.ADMIN:
@@ -158,6 +160,52 @@ export function getCategorizedNavigation(role, user) {
   const isAdmin = primaryRole === ROLES.ADMIN
   const authUser = user || { roles: [primaryRole] }
 
+  // Dedicated, tailored navigation architecture for Professors
+  if (primaryRole === ROLES.PROFESSOR) {
+    return [
+      {
+        type: 'link',
+        id: 'dashboard',
+        label: 'Dashboard',
+        to: '/dashboard',
+        end: true,
+      },
+      {
+        type: 'group',
+        id: 'advising',
+        label: 'Advising',
+        badge: 'ACAD',
+        items: [
+          { to: '/students', label: 'Student Roster', desc: 'Department student cohort directory' },
+          { to: '/mentorship?tab=incoming', label: 'Mentorship Requests', desc: 'Incoming student guidance requests' },
+          { to: '/mentorship?tab=active', label: 'My Mentorships', desc: 'Active student mentees' },
+          { to: '/students?tab=analytics', label: 'Student Analytics', desc: 'Cohort engagement & mentoring metrics' },
+        ],
+      },
+      {
+        type: 'group',
+        id: 'campus',
+        label: 'Campus',
+        items: [
+          { to: '/announcements', label: 'Department Announcements', desc: 'Broadcast notices & symposium calls' },
+          { to: '/events', label: 'Events & Seminars', desc: 'Department seminars & workshops' },
+          { to: '/directory', label: 'Alumni Directory', desc: 'Connect with department alumni' },
+          { to: '/jobs', label: 'Opportunities Board', desc: 'Browse curated career roles' },
+        ],
+      },
+      {
+        type: 'group',
+        id: 'ai',
+        label: 'AI Suite',
+        badge: 'AI',
+        items: [
+          { to: '/assistant', label: 'AI Assistant', desc: 'Interactive career guidance chat' },
+          { to: '/semantic-search', label: 'Semantic Search', desc: 'AI-powered directory search' },
+        ],
+      },
+    ]
+  }
+
   const nav = [
     {
       type: 'link',
@@ -172,10 +220,7 @@ export function getCategorizedNavigation(role, user) {
       label: 'Explore',
       items: [
         { to: '/directory', label: 'Alumni Directory', desc: 'Connect with alumni & peers' },
-        { to: '/mentorship', label: 'Mentorship', desc: 'Find or provide career guidance' },
-        ...(primaryRole === ROLES.PROFESSOR || isAdmin
-          ? [{ to: '/students', label: 'Students', desc: 'Student cohort directory' }]
-          : []),
+        { to: '/mentorship', label: 'Find a Mentor', desc: 'Find or provide career guidance' },
       ].filter((item) => canAccessRoute(authUser, item.to)),
     },
     {
@@ -199,9 +244,7 @@ export function getCategorizedNavigation(role, user) {
       label: 'Campus',
       items: [
         { to: '/events', label: 'Campus Events', desc: 'Workshops, reunions & webinars' },
-        ...(primaryRole === ROLES.PROFESSOR || isAdmin
-          ? [{ to: '/announcements', label: 'Announcements', desc: 'Post and review broadcasts' }]
-          : []),
+        { to: '/announcements', label: 'Announcements', desc: 'Campus broadcast bulletins' },
       ].filter((item) => canAccessRoute(authUser, item.to)),
     },
     {
@@ -251,7 +294,7 @@ export function canAccessRoute(user, path) {
   }
 
   // Protect Professor-only routes
-  if (path.startsWith('/students') || path.startsWith('/announcements')) {
+  if (path.startsWith('/students')) {
     return primaryRole === ROLES.PROFESSOR || primaryRole === ROLES.ADMIN
   }
 

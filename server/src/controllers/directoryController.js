@@ -6,7 +6,10 @@ import { sendSuccess } from '../utils/response.js'
 export const search = asyncHandler(async (req, res) => {
   const { page, limit, ...filters } = getQuery(req)
   const offset = (page - 1) * limit
-  const result = await directoryService.searchDirectory({ ...filters, limit, offset }, req.user?.id)
+  const result = await directoryService.searchDirectory(
+    { ...filters, limit, offset, viewerId: req.user?.id },
+    req.user?.id,
+  )
   sendSuccess(res, result.rows, {
     meta: {
       page,

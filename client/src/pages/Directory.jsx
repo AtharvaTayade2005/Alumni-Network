@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { connections, directory } from '../services/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Avatar, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field,
   Input, LoadingBlock, Pagination, Select, Spinner,
@@ -29,6 +30,7 @@ export default function Directory() {
   const [filterOptions, setFilterOptions] = useState(null)
   const [busy, setBusy] = useState({})
   const [message, setMessage] = useState(null)
+  const [connectionStates, setConnectionStates] = useState({})
 
   useEffect(() => {
     directory.filters()
@@ -63,7 +65,17 @@ export default function Directory() {
         directory.search(params),
         loadPending(),
       ])
-      setResult({ rows: dirRes.data ?? [], meta: dirRes.meta ?? null })
+      const rows = dirRes.data ?? []
+      setResult({ rows, meta: dirRes.meta ?? null })
+      setConnectionStates((prev) => {
+        const next = { ...prev }
+        for (const person of rows) {
+          if (person.connectionState) {
+            next[person.id] = person.connectionState
+          }
+        }
+        return next
+      })
       setState({ loading: false, error: null })
     } catch (error) {
       setResult({ rows: [], meta: null })
@@ -92,16 +104,41 @@ export default function Directory() {
     setMessage(null)
     try {
       await connections.request(userId)
-      // Optimistically update the connection state on this row
       setResult((prev) => ({
         ...prev,
         rows: prev.rows.map((row) => (
           row.id === userId ? { ...row, connectionState: 'pending_outgoing' } : row
         )),
       }))
+      setConnectionStates((prev) => ({ ...prev, [userId]: 'pending_outgoing' }))
       setMessage({ tone: 'success', text: `Connection request sent to ${name}.` })
     } catch (err) {
-      setMessage({ tone: 'error', text: err.message || 'Failed to send connection request.' })
+      const msg = err.message || ''
+      if (
+        msg.toLowerCase().includes('already sent') ||
+        msg.toLowerCase().includes('already exists') ||
+        err.status === 409
+      ) {
+        setConnectionStates((prev) => ({ ...prev, [userId]: 'pending_outgoing' }))
+        setResult((prev) => ({
+          ...prev,
+          rows: prev.rows.map((row) => (
+            row.id === userId ? { ...row, connectionState: 'pending_outgoing' } : row
+          )),
+        }))
+        setMessage({ tone: 'info', text: `Connection request is already pending with ${name}.` })
+      } else if (msg.toLowerCase().includes('already connected')) {
+        setConnectionStates((prev) => ({ ...prev, [userId]: 'connected' }))
+        setResult((prev) => ({
+          ...prev,
+          rows: prev.rows.map((row) => (
+            row.id === userId ? { ...row, connectionState: 'connected' } : row
+          )),
+        }))
+        setMessage({ tone: 'info', text: `You are already connected with ${name}.` })
+      } else {
+        setMessage({ tone: 'error', text: err.message || 'Failed to send connection request.' })
+      }
     } finally {
       setBusy((prev) => ({ ...prev, [userId]: false }))
     }
@@ -312,6 +349,12 @@ export default function Directory() {
         </Card>
 
         <Card className="overflow-hidden">
+          {notice && (
+            <div className="p-4 border-b border-swiss-border">
+              <Alert tone={notice.tone} onDismiss={() => setNotice(null)}>{notice.text}</Alert>
+            </div>
+          )}
+
           <div className="flex items-center justify-between border-b border-swiss-border px-5 py-3">
             <p className="text-sm text-swiss-muted">
               {state.loading ? 'Searching' : (
@@ -339,9 +382,9 @@ export default function Directory() {
             <>
               <ul className="divide-y divide-swiss-border">
                 {result.rows.map((person) => {
-                  const isSelf = person.id === user?.id || person.connectionState === 'self'
                   const matchingPending = pendingRequests.find((p) => p.peer?.id === person.id)
-                  const connectionState = person.connectionState || (matchingPending ? 'pending_incoming' : 'none')
+                  const connectionState = connectionStates[person.id] || person.connectionState || (matchingPending ? 'pending_incoming' : 'none')
+                  const isSelf = person.id === user?.id || connectionState === 'self'
                   const connectionId = person.connectionId || matchingPending?.id
 
                   return (
@@ -384,7 +427,6 @@ export default function Directory() {
                             </div>
                           ) : null}
                         </div>
-
                         {/* Connection Action Buttons */}
                         <div className="shrink-0 flex items-center gap-2">
                           {isSelf ? (
@@ -425,6 +467,8 @@ export default function Directory() {
                               disabled={busy[person.id]}
                             >
                               {busy[person.id] ? <Spinner /> : 'Connect'}
+                            </Button>
+                          )}
                             </Button>
                           )}
                         </div>

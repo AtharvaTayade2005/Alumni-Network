@@ -14,5 +14,6 @@ export {
   admin,
   connections,
   oauth,
+  professor,
 } from './api.real.js'
 

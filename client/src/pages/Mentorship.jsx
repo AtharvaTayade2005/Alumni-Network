@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { mentorship } from '../services/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Avatar, Badge, Button, Card, EmptyState, ErrorState,
   Field, Input, LoadingBlock, Select, Textarea, cx,
@@ -203,7 +204,7 @@ function MentorCard({ mentor, onRequested }) {
   )
 }
 
-function RequestCard({ request, onRespond, onCancel, busy }) {
+function RequestCard({ request, onRespond, onCancel, busy, isProfessor }) {
   const [note, setNote] = useState('')
   const incoming = request.direction === 'incoming'
 
@@ -212,15 +213,17 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
       <div className="mb-3 flex items-start gap-3">
         <PersonHeading
           peer={request.peer}
-          to={`/alumni/${request.peer?.id}`}
+          to={request.peer?.id ? `/messages/${request.peer.id}` : undefined}
           caption={incoming
-            ? 'Requested your mentorship'
+            ? (isProfessor ? `Student Advising (${request.peer?.currentCompany || 'Enrolled Student'})` : 'Requested your mentorship')
             : `You requested mentorship from ${request.peer?.name ?? 'them'}`}
         />
-        <Badge tone={STATUS_TONES[request.status] ?? 'slate'}>{request.status.toUpperCase()}</Badge>
+        <Badge tone={STATUS_TONES[request.status?.toLowerCase()] ?? 'slate'}>{request.status?.toUpperCase()}</Badge>
       </div>
 
       <DetailList items={[
+        ['Candidate', request.peer?.name],
+        ['Program / Cohort', request.peer?.currentCompany || 'Enrolled Student'],
         ['Career goal', request.careerGoal],
         ['Focus area', request.areaOfInterest],
         ['Preferred mode', request.preferredMode],
@@ -233,19 +236,19 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
         </p>
       ) : null}
 
-      {incoming && request.status === 'pending' ? (
+      {incoming && request.status?.toLowerCase() === 'pending' ? (
         <div className={cx(STACK, 'mt-4')}>
           <Field label="Response note (optional)">
             <Input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={1000}
-              placeholder="e.g. Happy to help! Let's connect on Tuesdays."
+              placeholder={isProfessor ? "e.g. Glad to guide you. Let's schedule an advising session." : "e.g. Happy to help! Let's connect on Tuesdays."}
             />
           </Field>
           <div className={ROW}>
             <Button onClick={() => onRespond(request.id, 'accepted', note)} disabled={busy}>
-              {busy ? 'Processing...' : 'Accept request'}
+              {busy ? 'Processing...' : (isProfessor ? 'Accept Advising' : 'Accept request')}
             </Button>
             <Button
               variant="secondary"
@@ -254,11 +257,16 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
             >
               Decline
             </Button>
+            {request.peer?.id && (
+              <Link to={`/messages/${request.peer.id}`}>
+                <Button variant="ghost">Message Student</Button>
+              </Link>
+            )}
           </div>
         </div>
       ) : null}
 
-      {!incoming && request.status === 'pending' ? (
+      {!incoming && request.status?.toLowerCase() === 'pending' ? (
         <div className={cx(ROW, 'mt-4')}>
           <Button variant="ghost" onClick={() => onCancel(request.id)} disabled={busy}>
             {busy ? 'Cancelling...' : 'Cancel request'}
@@ -269,7 +277,7 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
   )
 }
 
-function MentorshipCard({ item, onEnd, onComplete, busy }) {
+function MentorshipCard({ item, onEnd, onComplete, busy, isProfessor }) {
   const mine = item.role === 'mentor'
   const theyAre = [item.peer?.currentPosition, item.peer?.currentCompany]
     .filter(Boolean).join(' at ')
@@ -279,24 +287,30 @@ function MentorshipCard({ item, onEnd, onComplete, busy }) {
       <div className="mb-3 flex items-start gap-3">
         <PersonHeading
           peer={item.peer}
-          to={`/alumni/${item.peer?.id}`}
-          caption={mine ? 'You are mentoring' : 'You are being mentored'}
+          to={item.peer?.id ? `/messages/${item.peer.id}` : undefined}
+          caption={mine
+            ? (isProfessor ? `Student Mentee · ${item.peer?.currentCompany || 'Undergraduate'}` : 'You are mentoring')
+            : 'You are being mentored'}
         />
-        <Badge tone={STATUS_TONES[item.status] ?? 'slate'}>{item.status.toUpperCase()}</Badge>
+        <Badge tone={STATUS_TONES[item.status?.toLowerCase()] ?? 'slate'}>{item.status?.toUpperCase()}</Badge>
       </div>
 
       <DetailList items={[
         ['Started', formatDate(item.startedAt)],
         ['Ended', item.endedAt ? formatDate(item.endedAt) : null],
-        ['They are', theyAre],
+        ['Affiliation', theyAre || item.peer?.currentCompany || 'Enrolled Student'],
         ['Reason', item.endReason],
       ]} />
 
-      {item.status === 'active' ? (
+      {item.status?.toLowerCase() === 'active' ? (
         <div className={cx(ROW, 'mt-4')}>
-          <Link to={`/messages/${item.peer?.id}`}>
-            <Button size="sm">Message</Button>
-          </Link>
+          {item.peer?.id && (
+            <Link to={`/messages/${item.peer.id}`}>
+              <Button size="sm" variant={isProfessor ? "secondary" : "primary"}>
+                {isProfessor ? 'Message Student' : 'Message'}
+              </Button>
+            </Link>
+          )}
           <Button size="sm" variant="secondary" onClick={() => onComplete(item.id)} disabled={busy}>
             Mark complete
           </Button>
@@ -310,11 +324,34 @@ function MentorshipCard({ item, onEnd, onComplete, busy }) {
 }
 
 export default function Mentorship() {
+  const { user, role } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [tab, setTab] = useState(
-    () => new URLSearchParams(location.search).get('tab') || 'find',
-  )
+
+  const isProfessor = role === 'PROFESSOR' || role === 'FACULTY' ||
+    user?.role === 'professor' || user?.roles?.includes('PROFESSOR')
+
+  const tabs = isProfessor ? [
+    ['incoming', 'Advising Requests'],
+    ['active', 'Active Mentees'],
+    ['find', 'Faculty & Mentors'],
+  ] : [
+    ['find', 'Find a mentor'],
+    ['incoming', 'Requests'],
+    ['active', 'My mentorships'],
+  ]
+
+  const queryTab = new URLSearchParams(location.search).get('tab')
+  const defaultTab = isProfessor ? 'incoming' : 'find'
+  const [tab, setTab] = useState(() => queryTab || defaultTab)
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get('tab')
+    if (q && q !== tab) {
+      setTab(q)
+    }
+  }, [location.search])
+
   const [state, setState] = useState({
     mentors: [], requests: [], mentorships: [], loading: true, error: null,
   })
@@ -365,18 +402,22 @@ export default function Mentorship() {
 
   const incomingRequests = state.requests.filter((r) => r.direction === 'incoming')
   const outgoingRequests = state.requests.filter((r) => r.direction === 'outgoing')
-  const pendingIncomingCount = incomingRequests.filter((r) => r.status === 'pending').length
-  const activeCount = state.mentorships.filter((m) => m.status === 'active').length
+  const pendingIncomingCount = incomingRequests.filter((r) => (r.status || '').toLowerCase() === 'pending').length
+  const activeCount = state.mentorships.filter((m) => (m.status || '').toLowerCase() === 'active').length
 
   const badges = { incoming: pendingIncomingCount, active: activeCount }
 
   return (
     <div className={STACK}>
       <header className="border-b border-swiss-border pb-4">
-        <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase mb-2">04 &mdash; MENTORSHIP</p>
-        <h1 className="text-3xl font-bold tracking-tight text-swiss-text">MENTORSHIP</h1>
+        <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase mb-2">04 &mdash; MENTORSHIP & ADVISING</p>
+        <h1 className="text-3xl font-bold tracking-tight text-swiss-text">
+          {isProfessor ? 'STUDENT ADVISING & MENTORSHIP' : 'MENTORSHIP'}
+        </h1>
         <p className="mt-2 text-sm text-swiss-muted max-w-2xl leading-relaxed">
-          Connect with industry leaders for 1-on-1 career guidance, portfolio reviews, and graduate school advising.
+          {isProfessor
+            ? 'Review incoming undergraduate guidance requests, coordinate research projects, and advise active mentees.'
+            : 'Connect with industry leaders for 1-on-1 career guidance, portfolio reviews, and graduate school advising.'}
         </p>
       </header>
 
@@ -386,7 +427,7 @@ export default function Mentorship() {
 
       {/* Tabs Navigation */}
       <nav className={ROW} role="tablist">
-        {TABS.map(([value, label]) => (
+        {tabs.map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -450,9 +491,13 @@ export default function Mentorship() {
       {tab === 'incoming' ? (
         <div className={STACK}>
           <div className="border-b border-swiss-border pb-3">
-            <h2 className="text-base font-bold text-swiss-text uppercase tracking-wide">Mentorship Requests</h2>
+            <h2 className="text-base font-bold text-swiss-text uppercase tracking-wide">
+              {isProfessor ? 'Advising Requests' : 'Mentorship Requests'}
+            </h2>
             <p className="text-sm text-swiss-muted mt-1">
-              Track mentorship requests you&apos;ve sent and respond to requests you&apos;ve received.
+              {isProfessor
+                ? 'Review and manage guidance requests submitted by undergraduate students.'
+                : "Track mentorship requests you've sent and respond to requests you've received."}
             </p>
           </div>
 
@@ -464,7 +509,7 @@ export default function Mentorship() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-swiss-border pb-2">
                   <h3 className="text-xs font-bold font-mono tracking-widest text-swiss-text uppercase">
-                    INCOMING REQUESTS ({incomingRequests.length})
+                    {isProfessor ? `STUDENT ADVISING REQUESTS (${incomingRequests.length})` : `INCOMING REQUESTS (${incomingRequests.length})`}
                   </h3>
                   <span className="text-[11px] font-mono text-swiss-label">Scholars seeking your guidance</span>
                 </div>
@@ -473,7 +518,7 @@ export default function Mentorship() {
                   <Card className="p-6">
                     <EmptyState
                       title="No incoming requests"
-                      description="You have no pending mentorship requests awaiting your response."
+                      description={isProfessor ? "You have responded to all incoming student advising requests." : "You have no pending mentorship requests awaiting your response."}
                     />
                   </Card>
                 ) : (
@@ -482,6 +527,7 @@ export default function Mentorship() {
                       <RequestCard
                         key={request.id}
                         request={request}
+                        isProfessor={isProfessor}
                         busy={busyId === request.id}
                         onRespond={(id, status, note) => act(
                           id,
@@ -496,40 +542,43 @@ export default function Mentorship() {
               </div>
 
               {/* Section 2: Sent requests initiated by the user */}
-              <div className="space-y-4 pt-4">
-                <div className="flex items-center justify-between border-b border-swiss-border pb-2">
-                  <h3 className="text-xs font-bold font-mono tracking-widest text-swiss-text uppercase">
-                    SENT REQUESTS ({outgoingRequests.length})
-                  </h3>
-                  <span className="text-[11px] font-mono text-swiss-label">Requests you sent to mentors</span>
-                </div>
-
-                {outgoingRequests.length === 0 ? (
-                  <Card className="p-6">
-                    <EmptyState
-                      title="No sent requests"
-                      description="You haven't sent any mentorship requests yet."
-                      action={<Button variant="secondary" onClick={() => changeTab('find')}>Find a mentor →</Button>}
-                    />
-                  </Card>
-                ) : (
-                  <div className="space-y-4">
-                    {outgoingRequests.map((request) => (
-                      <RequestCard
-                        key={request.id}
-                        request={request}
-                        busy={busyId === request.id}
-                        onRespond={(id, status, note) => act(
-                          id,
-                          () => mentorship.respond(id, { status, responseNote: note || undefined }),
-                          status === 'accepted' ? 'Mentorship accepted' : 'Request declined',
-                        )}
-                        onCancel={(id) => act(id, () => mentorship.cancel(id), 'Request cancelled')}
-                      />
-                    ))}
+              {(!isProfessor || outgoingRequests.length > 0) && (
+                <div className="space-y-4 pt-4">
+                  <div className="flex items-center justify-between border-b border-swiss-border pb-2">
+                    <h3 className="text-xs font-bold font-mono tracking-widest text-swiss-text uppercase">
+                      SENT REQUESTS ({outgoingRequests.length})
+                    </h3>
+                    <span className="text-[11px] font-mono text-swiss-label">Requests you sent to mentors</span>
                   </div>
-                )}
-              </div>
+
+                  {outgoingRequests.length === 0 ? (
+                    <Card className="p-6">
+                      <EmptyState
+                        title="No sent requests"
+                        description="You haven't sent any mentorship requests yet."
+                        action={<Button variant="secondary" onClick={() => changeTab('find')}>Find a mentor →</Button>}
+                      />
+                    </Card>
+                  ) : (
+                    <div className="space-y-4">
+                      {outgoingRequests.map((request) => (
+                        <RequestCard
+                          key={request.id}
+                          request={request}
+                          isProfessor={isProfessor}
+                          busy={busyId === request.id}
+                          onRespond={(id, status, note) => act(
+                            id,
+                            () => mentorship.respond(id, { status, responseNote: note || undefined }),
+                            status === 'accepted' ? 'Mentorship accepted' : 'Request declined',
+                          )}
+                          onCancel={(id) => act(id, () => mentorship.cancel(id), 'Request cancelled')}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -551,8 +600,8 @@ export default function Mentorship() {
             <Card className="p-8">
               <EmptyState
                 title="No mentorships yet"
-                description="Accept an incoming request or have a mentor accept your request to begin."
-                action={<Button onClick={() => changeTab('find')}>Find a mentor →</Button>}
+                description={isProfessor ? "No active mentees currently. Accept an incoming advising request to begin." : "Accept an incoming request or have a mentor accept your request to begin."}
+                action={<Button onClick={() => changeTab(isProfessor ? 'incoming' : 'find')}>{isProfessor ? 'View Advising Requests' : 'Find a mentor →'}</Button>}
               />
             </Card>
           ) : null}
@@ -562,6 +611,7 @@ export default function Mentorship() {
               <MentorshipCard
                 key={item.id}
                 item={item}
+                isProfessor={isProfessor}
                 busy={busyId === item.id}
                 onComplete={(id) => act(id, () => mentorship.complete(id), 'Mentorship marked as complete')}
                 onEnd={(id) => act(id, () => mentorship.end(id), 'Mentorship ended')}

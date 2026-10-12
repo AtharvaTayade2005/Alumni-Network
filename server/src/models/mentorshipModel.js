@@ -144,10 +144,13 @@ export async function createRelationship({ requestId, mentorId, menteeId }, db =
  */
 export async function assertCapacityWithLock(mentorId, menteeId, db = { query }) {
   const { rows } = await db.query(
-    `SELECT COALESCE(ap.mentorship_capacity, 1) AS capacity,
+    `SELECT COALESCE(ap.mentorship_capacity, 20) AS capacity,
             (SELECT COUNT(*)::int FROM mentorship_relationships r
               WHERE r.mentor_id = $1 AND r.mentee_id <> $2 AND r.status = 'active') AS taken,
-            ap.is_open_to_mentor, ap.verification_status
+            ap.is_open_to_mentor, ap.verification_status,
+            EXISTS (SELECT 1 FROM user_roles ur
+                    JOIN roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = u.id AND LOWER(r.name) IN ('professor', 'faculty')) AS is_professor
      FROM users u
      LEFT JOIN alumni_profiles ap ON ap.user_id = u.id
      WHERE u.id = $1
@@ -156,11 +159,13 @@ export async function assertCapacityWithLock(mentorId, menteeId, db = { query })
   )
   const mentor = rows[0]
   if (!mentor) throw notFound('Mentor')
-  if (!mentor.is_open_to_mentor || mentor.verification_status !== 'verified') {
-    throw badRequest('That member is not available for mentorship')
-  }
-  if (mentor.taken >= mentor.capacity) {
-    throw conflict('That mentor is now at capacity')
+  if (!mentor.is_professor) {
+    if (!mentor.is_open_to_mentor || mentor.verification_status !== 'verified') {
+      throw badRequest('That member is not available for mentorship')
+    }
+    if (mentor.taken >= mentor.capacity) {
+      throw conflict('That mentor is now at capacity')
+    }
   }
   return mentor
 }
