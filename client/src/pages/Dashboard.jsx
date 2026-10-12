@@ -45,6 +45,7 @@ export default function Dashboard() {
     recentNotifs: [],
     adminMetrics: null,
     donationHistory: [],
+    recommendedMentors: [],
   })
 
   async function loadDashboard() {
@@ -61,6 +62,7 @@ export default function Dashboard() {
         notifsRes,
         metricsRes,
         donationsRes,
+        mentorsRes,
       ] = await Promise.all([
         profiles.me(),
         jobs.list({ limit: 4 }),
@@ -71,6 +73,7 @@ export default function Dashboard() {
         notifications.list({ limit: 5 }),
         role === ROLES.ADMIN ? admin.metrics() : Promise.resolve({ data: null }),
         role === ROLES.ALUMNI ? donations.history(user?.id) : Promise.resolve({ data: [] }),
+        role === ROLES.STUDENT ? mentorship.mentors({ limit: 4 }) : Promise.resolve({ data: [] }),
       ])
 
       setData({
@@ -83,6 +86,7 @@ export default function Dashboard() {
         recentNotifs: (notifsRes.data || []).slice(0, 4),
         adminMetrics: metricsRes.data,
         donationHistory: donationsRes.data || [],
+        recommendedMentors: mentorsRes.data || [],
       })
       setLoading(false)
     } catch (err) {
@@ -225,41 +229,43 @@ export default function Dashboard() {
                   actions={<Link to="/mentorship" className="font-mono text-xs text-swiss-label hover:text-swiss-text uppercase">VIEW ALL →</Link>}
                 />
                 <div className="p-5 space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="p-4 border border-swiss-border bg-swiss-surface rounded-sm space-y-3">
-                      <div className="flex items-start gap-3">
-                        <Avatar name="Aarav Mehta" size="md" />
-                        <div>
-                          <p className="font-bold text-sm text-swiss-text">Aarav Mehta</p>
-                          <p className="text-xs text-swiss-muted">Sr. SWE at Microsoft · Class of 2021</p>
-                          <Badge tone="green" className="mt-1">1 Open Slot</Badge>
+                  {data.recommendedMentors.length === 0 ? (
+                    <EmptyState
+                      title="NO MENTORS FOUND"
+                      description="Discover verified alumni mentors ready to offer 1-on-1 career guidance."
+                      action={
+                        <Link to="/mentorship">
+                          <Button size="sm" variant="secondary">EXPLORE MENTORS →</Button>
+                        </Link>
+                      }
+                    />
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {data.recommendedMentors.slice(0, 2).map((mentor) => (
+                        <div key={mentor.id} className="p-4 border border-swiss-border bg-swiss-surface rounded-sm space-y-3">
+                          <div className="flex items-start gap-3">
+                            <Avatar name={mentor.name} src={mentor.avatarUrl} size="md" />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-sm text-swiss-text truncate">{mentor.name}</p>
+                              <p className="text-xs text-swiss-muted truncate">
+                                {[mentor.currentPosition, mentor.currentCompany].filter(Boolean).join(' at ') || 'Alumni Mentor'}
+                                {mentor.graduationYear ? ` · Class of ${mentor.graduationYear}` : ''}
+                              </p>
+                              <Badge tone={mentor.openSlots > 0 ? "green" : "slate"} className="mt-1">
+                                {mentor.openSlots > 0 ? `${mentor.openSlots} Open Slot${mentor.openSlots === 1 ? '' : 's'}` : 'Capacity reached'}
+                              </Badge>
+                            </div>
+                          </div>
+                          <p className="text-xs text-swiss-text line-clamp-2">
+                            {mentor.bio || mentor.industry || 'Open to system design, distributed systems, and career advice.'}
+                          </p>
+                          <Link to={`/alumni/${mentor.id}`}>
+                            <Button size="sm" variant="secondary" className="w-full justify-center">VIEW PROFILE →</Button>
+                          </Link>
                         </div>
-                      </div>
-                      <p className="text-xs text-swiss-text line-clamp-2">
-                        System design, distributed storage primitives, and resume critiques for aspiring engineers.
-                      </p>
-                      <Link to="/alumni/u_alumni_1">
-                        <Button size="sm" variant="secondary" className="w-full justify-center">VIEW PROFILE →</Button>
-                      </Link>
+                      ))}
                     </div>
-
-                    <div className="p-4 border border-swiss-border bg-swiss-surface rounded-sm space-y-3">
-                      <div className="flex items-start gap-3">
-                        <Avatar name="Neha Kapoor" size="md" />
-                        <div>
-                          <p className="font-bold text-sm text-swiss-text">Neha Kapoor</p>
-                          <p className="text-xs text-swiss-muted">Sr. PM at Google · Class of 2018</p>
-                          <Badge tone="blue" className="mt-1">Open to Chat</Badge>
-                        </div>
-                      </div>
-                      <p className="text-xs text-swiss-text line-clamp-2">
-                        Guiding students on breaking into APM programs, case interviews, and product leadership.
-                      </p>
-                      <Link to="/alumni/u_alumni_2">
-                        <Button size="sm" variant="secondary" className="w-full justify-center">VIEW PROFILE →</Button>
-                      </Link>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </Card>
 
@@ -371,8 +377,8 @@ export default function Dashboard() {
                       <p className="font-bold text-sm text-swiss-text">Riya Shah</p>
                       <p className="text-xs text-swiss-muted">3rd Year B.Tech CSE · Distributed Systems Research</p>
                     </div>
-                    <Link to="/messages/u_student_1">
-                      <Button size="sm">MESSAGE STUDENT</Button>
+                    <Link to="/students">
+                      <Button size="sm">STUDENT PROFILE</Button>
                     </Link>
                   </div>
                   <div className="p-5 flex items-center justify-between">
@@ -380,8 +386,8 @@ export default function Dashboard() {
                       <p className="font-bold text-sm text-swiss-text">Dev Patel</p>
                       <p className="text-xs text-swiss-muted">4th Year B.Tech IT · Deepfake Video Detection Thesis</p>
                     </div>
-                    <Link to="/messages/u_student_2">
-                      <Button size="sm">MESSAGE STUDENT</Button>
+                    <Link to="/students">
+                      <Button size="sm">STUDENT PROFILE</Button>
                     </Link>
                   </div>
                 </div>
@@ -473,13 +479,13 @@ export default function Dashboard() {
                         {evt.isVirtual ? 'ONLINE' : 'IN-PERSON'}
                       </Badge>
                       <span className="font-mono text-[10px] text-swiss-label">
-                        {new Date(evt.date).toLocaleDateString()}
+                        {evt.date ? new Date(evt.date).toLocaleDateString() : 'Upcoming'}
                       </span>
                     </div>
                     <Link to={`/events/${evt.id}`} className="block font-bold text-xs text-swiss-text hover:underline">
                       {evt.title}
                     </Link>
-                    <p className="text-[11px] text-swiss-muted truncate">{evt.location}</p>
+                    <p className="text-[11px] text-swiss-muted truncate">{evt.location || evt.venue || 'Campus Auditorium'}</p>
                   </li>
                 ))}
               </ul>

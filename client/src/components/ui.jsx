@@ -31,6 +31,7 @@ export function CardHeader({ title, description, actions }) {
 }
 
 export function Button({
+  as: Component = 'button',
   children, variant = 'primary', size = 'md', className, type = 'button', ...rest
 }) {
   const variants = {
@@ -44,9 +45,10 @@ export function Button({
     md: 'px-3.5 py-2 text-sm',
     lg: 'px-4 py-2.5 text-sm',
   }
+  const typeProp = Component === 'button' ? { type } : {}
   return (
-    <button
-      type={type}
+    <Component
+      {...typeProp}
       className={cx(
         'inline-flex items-center justify-center gap-1.5 rounded-sm font-medium transition-colors',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-swiss-text',
@@ -56,7 +58,7 @@ export function Button({
       {...rest}
     >
       {children}
-    </button>
+    </Component>
   )
 }
 

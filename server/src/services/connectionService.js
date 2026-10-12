@@ -188,7 +188,7 @@ export async function sendRequest({ requesterId, addresseeId, message }) {
       body: message
         ? `${requester.first_name} ${requester.last_name}: ${message.slice(0, 180)}`
         : `${requester.first_name} ${requester.last_name} would like to connect`,
-      link: '/network/connections',
+      link: `/alumni/${requesterId}`,
       email: addressee.email,
       emailPayload: {
         fromName: `${requester.first_name} ${requester.last_name}`,
@@ -250,7 +250,7 @@ export async function respond({ connectionId, userId, accept }) {
         type: 'connection_accepted',
         title: 'Connection accepted',
         body: 'Someone accepted your connection request',
-        link: '/network/connections',
+        link: `/alumni/${userId}`,
         email: requester?.email ?? null,
         emailPayload: { withName: 'A member' },
         db,
@@ -270,15 +270,17 @@ export async function respond({ connectionId, userId, accept }) {
 }
 
 /**
- * Removes a connection by id.
+ * Removes a connection by connection id or peer user id.
  *
  * Both participants may do this: dropping a connection is symmetric, unlike
  * answering a request.
  */
-export async function removeById(userId, connectionId) {
+export async function removeById(userId, targetId) {
   const { rowCount } = await query(
-    'DELETE FROM connections WHERE id = $1 AND (requester_id = $2 OR addressee_id = $2)',
-    [connectionId, userId],
+    `DELETE FROM connections
+     WHERE (id = $1 AND (requester_id = $2 OR addressee_id = $2))
+        OR ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))`,
+    [targetId, userId],
   )
   if (!rowCount) throw notFound('Connection')
   return { removed: true }

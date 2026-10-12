@@ -8,7 +8,7 @@ import { query } from '../config/database.js'
  * EXISTS subquery handles multi-value skill filtering without the row
  * multiplication a JOIN would cause, which keeps COUNT(*) accurate.
  */
-export async function searchDirectory(filters) {
+export async function searchDirectory(filters, viewerId = null) {
   const {
     search, graduationYear, graduationYearFrom, graduationYearTo, degree,
     department, industry, company, country, region, city, skills,
@@ -151,12 +151,32 @@ export async function searchDirectory(filters) {
   )
 
   const userIds = rows.map((r) => r.id)
-  const skillMap = await getSkillMap(userIds)
+  const [skillMap, connectionMap] = await Promise.all([
+    getSkillMap(userIds),
+    getConnectionMap(userIds, viewerId),
+  ])
 
   return {
-    rows: rows.map((r) => shapeDirectoryRow(r, skillMap)),
+    rows: rows.map((r) => shapeDirectoryRow(r, skillMap, connectionMap, viewerId)),
     total: countRows[0].total,
   }
+}
+
+async function getConnectionMap(userIds, viewerId) {
+  if (!userIds.length || !viewerId) return new Map()
+  const { rows } = await query(
+    `SELECT id, requester_id, addressee_id, status
+     FROM connections
+     WHERE (requester_id = $1 AND addressee_id = ANY($2::UUID[]))
+        OR (addressee_id = $1 AND requester_id = ANY($2::UUID[]))`,
+    [viewerId, userIds],
+  )
+  const map = new Map()
+  for (const c of rows) {
+    const peerId = c.requester_id === viewerId ? c.addressee_id : c.requester_id
+    map.set(peerId, c)
+  }
+  return map
 }
 
 async function getSkillMap(userIds) {
@@ -177,11 +197,30 @@ async function getSkillMap(userIds) {
 }
 
 /** Applies each viewer's own privacy settings before data leaves the server. */
-function shapeDirectoryRow(row, skillMap) {
+function shapeDirectoryRow(row, skillMap, connectionMap = null, viewerId = null) {
   const email = row.show_email ? row.email : null
   const phone = row.show_phone ? row.phone : null
   const showLocation = row.show_location
   const showEmployer = row.show_employer
+
+  let connectionState = 'none'
+  let connectionId = null
+
+  if (viewerId && row.id === viewerId) {
+    connectionState = 'self'
+  } else if (viewerId && connectionMap) {
+    const c = connectionMap.get(row.id)
+    if (c) {
+      connectionId = c.id
+      if (c.status === 'accepted') connectionState = 'connected'
+      else if (c.status === 'blocked') connectionState = 'blocked'
+      else if (c.status === 'pending') {
+        connectionState = c.requester_id === viewerId ? 'pending_outgoing' : 'pending_incoming'
+      } else if (c.status === 'rejected') {
+        connectionState = 'none'
+      }
+    }
+  }
 
   return {
     id: row.id,
@@ -208,6 +247,8 @@ function shapeDirectoryRow(row, skillMap) {
     skills: skillMap.get(row.id) ?? [],
     email,
     phone,
+    connectionState,
+    connectionId,
   }
 }
 

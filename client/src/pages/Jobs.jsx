@@ -4,7 +4,7 @@ import { jobs } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Badge, Button, Card, CardHeader, EmptyState, ErrorState, Field,
-  Input, LoadingBlock, Pagination, Select, Textarea, cx,
+  Input, LoadingBlock, Pagination, Select, Textarea, Spinner, cx,
 } from '../components/ui.jsx'
 
 /**
@@ -86,8 +86,87 @@ function MetaList({ items }) {
   )
 }
 
+const isJobOpen = (status) => ['active', 'published', 'open'].includes(String(status || '').toLowerCase())
+
+function FormattedDescription({ text }) {
+  if (!text) {
+    return <p className="text-sm text-swiss-muted italic">No description provided.</p>
+  }
+
+  const lines = text.split('\n')
+  const blocks = []
+  let currentList = []
+
+  const flushList = () => {
+    if (currentList.length > 0) {
+      blocks.push({ type: 'list', items: [...currentList] })
+      currentList = []
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i]
+    const trimmed = rawLine.trim()
+
+    if (!trimmed) {
+      flushList()
+      continue
+    }
+
+    const bulletMatch = trimmed.match(/^([-*•]|\d+\.)\s+(.+)$/)
+    if (bulletMatch) {
+      currentList.push(bulletMatch[2])
+      continue
+    }
+
+    flushList()
+
+    if (trimmed.endsWith(':') || (trimmed.length <= 40 && trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed))) {
+      blocks.push({ type: 'heading', text: trimmed })
+    } else {
+      blocks.push({ type: 'paragraph', text: trimmed })
+    }
+  }
+  flushList()
+
+  return (
+    <div className="space-y-4 text-sm leading-relaxed text-swiss-text">
+      {blocks.map((block, idx) => {
+        if (block.type === 'heading') {
+          return (
+            <h4
+              key={idx}
+              className="pt-2 font-mono text-xs font-bold uppercase tracking-wider text-swiss-text border-b border-swiss-border/60 pb-1"
+            >
+              {block.text}
+            </h4>
+          )
+        }
+        if (block.type === 'list') {
+          return (
+            <ul key={idx} className="space-y-2 pl-1">
+              {block.items.map((item, itemIdx) => (
+                <li key={itemIdx} className="flex items-start gap-2.5">
+                  <span className="text-swiss-accent font-bold mt-0.5 text-xs select-none">▪</span>
+                  <span className="text-swiss-text/90">{item}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        return (
+          <p key={idx} className="text-swiss-text/90">
+            {block.text}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
 function JobCard({ job, onSave, busy }) {
   const deadline = deadlineLabel(job)
+  const open = isJobOpen(job.status)
   return (
     <article className={FLUSH}>
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -100,8 +179,8 @@ function JobCard({ job, onSave, busy }) {
           </Link>
           <p className={cx('truncate', MUTED)}>{job.companyName}</p>
         </div>
-        <Badge tone={job.status === 'active' ? 'green' : 'slate'}>
-          {job.status === 'active' ? 'Open' : job.status}
+        <Badge tone={open ? 'green' : 'slate'}>
+          {open ? 'Open' : (job.status ? job.status.toUpperCase() : 'Closed')}
         </Badge>
       </div>
 
@@ -127,8 +206,12 @@ function JobCard({ job, onSave, busy }) {
       ) : null}
 
       <div className={cx(ROW, 'mt-4')}>
-        <Button onClick={() => onSave(job)} disabled={busy || job.status !== 'active'}>
-          {job.isSaved ? 'Saved' : 'Save'}
+        <Button
+          variant={job.isSaved ? 'secondary' : 'primary'}
+          onClick={() => onSave(job)}
+          disabled={busy || (!job.isSaved && !open)}
+        >
+          {busy ? <Spinner /> : null} {job.isSaved ? '✓ Saved' : 'Save'}
         </Button>
         <Link to={`/jobs/${job.id}`} className={LINK_BUTTON}>View details</Link>
         {job.hasApplied ? <Badge tone="blue">Applied</Badge> : null}
@@ -202,110 +285,237 @@ function JobDetail({ jobId, onBack }) {
   useEffect(() => { load() }, [load])
 
   async function toggleSave() {
+    if (!job || busy) return
     setBusy(true)
+    setNotice(null)
     try {
-      if (job.isSaved) await jobs.unsave(job.id)
-      else await jobs.save(job.id)
-      await load()
+      if (job.isSaved) {
+        await jobs.unsave(job.id)
+        setJob((prev) => ({ ...prev, isSaved: false }))
+      } else {
+        await jobs.save(job.id)
+        setJob((prev) => ({ ...prev, isSaved: true }))
+      }
     } catch (error) {
-      setNotice({ tone: 'error', text: error.message })
+      setNotice({ tone: 'error', text: error.message || 'Failed to update saved status' })
     } finally {
       setBusy(false)
     }
   }
 
-  if (state.loading) return <Card><LoadingBlock rows={6} label="Loading job" /></Card>
+  if (state.loading) return <Card><LoadingBlock rows={8} label="Loading job details" /></Card>
   if (state.error) return <Card><ErrorState error={state.error} onRetry={load} /></Card>
-  if (!job) return null
+  if (!job) {
+    return (
+      <Card className="p-8">
+        <EmptyState
+          title="JOB NOT FOUND"
+          description="The requested job posting could not be found or has been removed."
+          action={<Button variant="secondary" onClick={onBack}>← Back to Jobs</Button>}
+        />
+      </Card>
+    )
+  }
 
   const deadline = deadlineLabel(job)
+  const open = isJobOpen(job.status)
 
   return (
     <div className={STACK}>
-      <Button variant="ghost" onClick={onBack}>Back to all jobs</Button>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-xs font-mono tracking-widest text-swiss-muted hover:text-swiss-text uppercase transition-colors"
+        >
+          ← BACK TO ALL JOBS
+        </button>
+      </div>
 
       {notice ? <Alert tone="error" onDismiss={() => setNotice(null)}>{notice.text}</Alert> : null}
 
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-swiss-text">{job.title}</h2>
-            <p className={MUTED}>
-              {job.companyName}
-              {job.companyId ? (
-                <> · <Link to={`/jobs/company/${job.companyId}`} className="underline">View company</Link></>
-              ) : null}
-            </p>
+      {/* Structured Job Header Card */}
+      <Card className="p-6">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 border-b border-swiss-border pb-6">
+          <div className="flex items-start gap-4">
+            <div className="h-12 w-12 shrink-0 bg-swiss-surface border border-swiss-border rounded-xs flex items-center justify-center font-mono font-bold text-sm text-swiss-text">
+              {job.companyName ? job.companyName.charAt(0).toUpperCase() : 'J'}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                <Badge tone={open ? 'green' : 'slate'}>
+                  {open ? 'OPEN ROLE' : (job.status ? job.status.toUpperCase() : 'CLOSED')}
+                </Badge>
+                {job.workMode ? (
+                  <Badge tone="slate">{label(WORK_MODES, job.workMode)}</Badge>
+                ) : null}
+                {job.employmentType ? (
+                  <Badge tone="slate">{label(EMPLOYMENT_TYPES, job.employmentType)}</Badge>
+                ) : null}
+                {job.experienceLevel ? (
+                  <Badge tone="slate">{label(LEVELS, job.experienceLevel)}</Badge>
+                ) : null}
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-swiss-text">
+                {job.title}
+              </h1>
+              <p className="mt-1 text-sm font-medium text-swiss-muted">
+                {job.companyName}
+                {job.companyId ? (
+                  <> · <Link to={`/jobs/company/${job.companyId}`} className="underline hover:text-swiss-text">View company profile</Link></>
+                ) : null}
+              </p>
+            </div>
           </div>
-          <Badge tone={job.status === 'active' ? 'green' : 'slate'}>{job.status}</Badge>
-        </div>
 
-        <div className="mt-3">
-          <MetaList items={[
-            job.location || 'Location flexible',
-            label(WORK_MODES, job.workMode),
-            label(EMPLOYMENT_TYPES, job.employmentType),
-            label(LEVELS, job.experienceLevel),
-            formatSalary(job),
-          ]} />
-        </div>
-
-        {job.skills?.length ? (
-          <ul className="mt-3 flex flex-wrap gap-1.5">
-            {job.skills.map((skill) => (
-              <li key={skill.id}><Badge tone="slate">{skill.name}</Badge></li>
-            ))}
-          </ul>
-        ) : null}
-
-        {job.deadline ? (
-          <p className={cx('mt-3', MUTED_SMALL)}>Applications close {formatDate(job.deadline)}</p>
-        ) : null}
-        {job.postedBy ? (
-          <p className={cx('mt-1', MUTED_SMALL)}>Posted by {job.postedBy.name}</p>
-        ) : null}
-
-        <div className={cx(ROW, 'mt-4')}>
-          <Button onClick={toggleSave} disabled={busy}>
-            {job.isSaved ? 'Remove from saved' : 'Save job'}
-          </Button>
-          {job.applicationUrl ? (
-            <a
-              className={LINK_BUTTON}
-              href={job.applicationUrl}
-              target="_blank"
-              rel="noreferrer noopener"
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <Button
+              variant={job.isSaved ? 'secondary' : 'primary'}
+              onClick={toggleSave}
+              disabled={busy}
             >
-              Apply on employer site
-            </a>
-          ) : null}
-        </div>
-      </Card>
-
-      <Card>
-        <h3 className="mb-2 text-base font-semibold text-swiss-text">About this role</h3>
-        <p className={PROSE}>{job.description}</p>
-      </Card>
-
-      {job.hasApplied ? (
-        <Alert tone="success" title="You have applied">
-          The employer can see your application. Track it under “My applications”.
-        </Alert>
-      ) : applying ? (
-        <Card>
-          <h3 className="mb-3 text-base font-semibold text-swiss-text">Apply to {job.title}</h3>
-          <ApplyPanel job={job} onDone={() => { setApplying(false); load() }} />
-        </Card>
-      ) : job.status === 'active' ? (
-        <Card>
-          <div className={ROW}>
-            <Button onClick={() => setApplying(true)}>Apply for this job</Button>
-            {deadline?.tone === 'red' ? (
-              <span className={MUTED_SMALL}>This role is no longer accepting applications.</span>
+              {busy ? <Spinner /> : null} {job.isSaved ? '✓ SAVED' : 'SAVE JOB'}
+            </Button>
+            {job.hasApplied ? (
+              <Badge tone="blue" className="px-3 py-2 text-xs font-mono">
+                ✓ APPLIED
+              </Badge>
+            ) : job.applicationUrl ? (
+              <a
+                className="inline-flex items-center justify-center rounded-sm px-4 py-2 text-sm font-medium bg-swiss-accent text-white hover:opacity-80 transition-colors"
+                href={job.applicationUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                APPLY ON COMPANY SITE ↗
+              </a>
+            ) : open ? (
+              <Button onClick={() => setApplying(true)}>
+                APPLY FOR THIS ROLE →
+              </Button>
             ) : null}
           </div>
-        </Card>
-      ) : null}
+        </div>
+
+        {/* Structured Meta Grid */}
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="p-3 border border-swiss-border bg-swiss-surface rounded-xs">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-swiss-label block">Salary Range</span>
+            <span className="mt-1 text-sm font-semibold text-swiss-text block">{formatSalary(job)}</span>
+          </div>
+          <div className="p-3 border border-swiss-border bg-swiss-surface rounded-xs">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-swiss-label block">Location</span>
+            <span className="mt-1 text-sm font-semibold text-swiss-text block">{job.location || 'Location flexible'}</span>
+          </div>
+          <div className="p-3 border border-swiss-border bg-swiss-surface rounded-xs">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-swiss-label block">Deadline</span>
+            <span className={cx("mt-1 text-sm font-semibold block", deadline?.tone === 'red' ? 'text-red-500' : 'text-swiss-text')}>
+              {deadline ? deadline.text : 'Open rolling'}
+            </span>
+          </div>
+          <div className="p-3 border border-swiss-border bg-swiss-surface rounded-xs">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-swiss-label block">Applicants</span>
+            <span className="mt-1 text-sm font-semibold text-swiss-text block">
+              {job.applicationCount || 0} candidate{(job.applicationCount === 1) ? '' : 's'}
+            </span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Main 2-Column Layout */}
+      <div className="grid gap-8 lg:grid-cols-3 items-start">
+        {/* Main Content (2 Columns) */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader
+              title="ROLE OVERVIEW & DESCRIPTION"
+              description="Detailed responsibilities, expectations, and core criteria"
+            />
+            <div className="p-6">
+              <FormattedDescription text={job.description} />
+            </div>
+          </Card>
+
+          {job.skills?.length ? (
+            <Card>
+              <CardHeader title="REQUIRED SKILLS & TECHNOLOGIES" />
+              <div className="p-6">
+                <div className="flex flex-wrap gap-2">
+                  {job.skills.map((skill) => (
+                    <Badge key={skill.id || skill.name} tone="slate">
+                      {skill.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
+          {job.hasApplied ? (
+            <Alert tone="success" title="Application Submitted">
+              Your application has been received by {job.companyName}. You can track status under the &ldquo;My Applications&rdquo; tab.
+            </Alert>
+          ) : applying ? (
+            <Card>
+              <CardHeader
+                title={`APPLY TO ${job.title.toUpperCase()}`}
+                description="Submit your application materials directly to the hiring coordinator"
+              />
+              <div className="p-6">
+                <ApplyPanel job={job} onDone={() => { setApplying(false); load() }} />
+              </div>
+            </Card>
+          ) : null}
+        </div>
+
+        {/* Sidebar Info (1 Column) */}
+        <div className="space-y-6">
+          <Card className="p-6 space-y-4 font-mono text-xs">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-swiss-label border-b border-swiss-border pb-2">
+              POSTING INFORMATION
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <span className="text-swiss-label uppercase text-[10px] block">Company:</span>
+                <span className="text-swiss-text font-medium text-sm">{job.companyName}</span>
+              </div>
+              {job.industry ? (
+                <div>
+                  <span className="text-swiss-label uppercase text-[10px] block">Industry:</span>
+                  <span className="text-swiss-text">{job.industry}</span>
+                </div>
+              ) : null}
+              {job.postedBy ? (
+                <div>
+                  <span className="text-swiss-label uppercase text-[10px] block">Posted By:</span>
+                  <span className="text-swiss-text">{job.postedBy.name}</span>
+                </div>
+              ) : null}
+              <div>
+                <span className="text-swiss-label uppercase text-[10px] block">Date Posted:</span>
+                <span className="text-swiss-text">{formatDate(job.createdAt)}</span>
+              </div>
+              <div>
+                <span className="text-swiss-label uppercase text-[10px] block">Saved Status:</span>
+                <span className={job.isSaved ? "text-emerald-500 font-bold" : "text-swiss-muted"}>
+                  {job.isSaved ? 'SAVED TO YOUR LIST' : 'NOT SAVED'}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-swiss-border">
+              <Button
+                variant={job.isSaved ? 'secondary' : 'primary'}
+                className="w-full justify-center"
+                disabled={busy}
+                onClick={toggleSave}
+              >
+                {busy ? <Spinner /> : null} {job.isSaved ? 'Remove from Saved' : 'Save This Job'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }
@@ -313,6 +523,7 @@ function JobDetail({ jobId, onBack }) {
 function CompanyDetail({ companyId, onBack }) {
   const [data, setData] = useState(null)
   const [state, setState] = useState({ loading: true, error: null })
+  const [busyId, setBusyId] = useState(null)
 
   const load = useCallback(async () => {
     setState({ loading: true, error: null })
@@ -326,6 +537,30 @@ function CompanyDetail({ companyId, onBack }) {
   }, [companyId])
 
   useEffect(() => { load() }, [load])
+
+  async function toggleSaveJob(job) {
+    if (busyId) return
+    setBusyId(job.id)
+    try {
+      if (job.isSaved) {
+        await jobs.unsave(job.id)
+        setData((prev) => ({
+          ...prev,
+          jobs: prev.jobs.map((j) => (j.id === job.id ? { ...j, isSaved: false } : j)),
+        }))
+      } else {
+        await jobs.save(job.id)
+        setData((prev) => ({
+          ...prev,
+          jobs: prev.jobs.map((j) => (j.id === job.id ? { ...j, isSaved: true } : j)),
+        }))
+      }
+    } catch {
+      // silently ignore or reload
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   if (state.loading) return <Card><LoadingBlock rows={4} label="Loading company" /></Card>
   if (state.error) return <Card><ErrorState error={state.error} onRetry={load} /></Card>
@@ -353,7 +588,14 @@ function CompanyDetail({ companyId, onBack }) {
       </Card>
       <CardHeader title="Open roles" />
       <div className={GRID}>
-        {data.jobs.map((job) => <JobCard key={job.id} job={job} busy onSave={() => {}} />)}
+        {data.jobs.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            busy={busyId === job.id}
+            onSave={toggleSaveJob}
+          />
+        ))}
       </div>
     </div>
   )
@@ -726,15 +968,28 @@ export default function Jobs({ view: routeView = 'board' }) {
   }, [tab])
 
   async function toggleSave(job) {
+    if (busyId) return
     setBusyId(job.id)
     setNotice(null)
     try {
-      if (job.isSaved) await jobs.unsave(job.id)
-      else await jobs.save(job.id)
-      if (tab === 'board') await load(clean(applied))
-      else if (tab === 'saved') setResult((prev) => ({ ...prev, rows: prev.rows.filter((r) => r.id !== job.id) }))
+      if (job.isSaved) {
+        await jobs.unsave(job.id)
+        setResult((prev) => ({
+          ...prev,
+          rows: prev.rows.map((r) => r.id === job.id ? { ...r, isSaved: false } : r),
+        }))
+        if (tab === 'saved') {
+          setResult((prev) => ({ ...prev, rows: prev.rows.filter((r) => r.id !== job.id) }))
+        }
+      } else {
+        await jobs.save(job.id)
+        setResult((prev) => ({
+          ...prev,
+          rows: prev.rows.map((r) => r.id === job.id ? { ...r, isSaved: true } : r),
+        }))
+      }
     } catch (error) {
-      setNotice({ tone: 'error', text: error.message })
+      setNotice({ tone: 'error', text: error.message || 'Failed to update saved job' })
     } finally {
       setBusyId(null)
     }
@@ -935,7 +1190,9 @@ export default function Jobs({ view: routeView = 'board' }) {
                   </Link>
                   <p className={cx('truncate', MUTED_SMALL)}>{job.companyName}</p>
                 </div>
-                <Badge tone={job.status === 'active' ? 'green' : 'slate'}>{job.status}</Badge>
+                <Badge tone={isJobOpen(job.status) ? 'green' : 'slate'}>
+                  {isJobOpen(job.status) ? 'Open' : (job.status ? job.status.toUpperCase() : 'Closed')}
+                </Badge>
               </div>
               <p className={cx('mt-2', MUTED_SMALL)}>
                 {job.applicationCount} application{job.applicationCount === 1 ? '' : 's'}

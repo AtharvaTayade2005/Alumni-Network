@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Avatar, Button, cx } from '../components/ui.jsx'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import RoleSwitcher from '../components/RoleSwitcher.jsx'
 import { getRoleNavigation } from '../utils/permissions.js'
 import { ROLES, ROLE_LABELS } from '../utils/roles.js'
@@ -184,7 +185,9 @@ export default function AppLayout() {
       </header>
 
       <main className={cx("mx-auto w-full max-w-6xl flex-1", !isHome && "px-4 py-8")}>
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {!isHome && (

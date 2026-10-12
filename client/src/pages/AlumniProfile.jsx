@@ -70,6 +70,22 @@ export default function AlumniProfile() {
   }
 
   if (state.error) {
+    const isNotFound = state.error?.status === 404 || state.error?.status === 422
+    if (isNotFound) {
+      return (
+        <Card className="p-8">
+          <EmptyState
+            title="PROFILE NOT FOUND"
+            description="The requested member profile could not be found or has an invalid identifier."
+            action={
+              <Button variant="secondary" onClick={() => navigate('/directory')}>
+                ← Back to Directory
+              </Button>
+            }
+          />
+        </Card>
+      )
+    }
     return <Card><ErrorState error={state.error} onRetry={load} /></Card>
   }
 

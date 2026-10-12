@@ -55,19 +55,20 @@ export default function Events() {
   }, [activeTab, user?.id])
 
   async function handleRsvpToggle(eventId, currentlyRsvpd) {
+    if (busyId) return
     setBusyId(eventId)
     setMessage(null)
     try {
       if (currentlyRsvpd) {
         const res = await events.cancelRsvp(eventId)
-        setMessage({ tone: 'info', text: res.message })
+        setMessage({ tone: 'info', text: res?.message || 'RSVP cancelled successfully.' })
       } else {
         const res = await events.rsvp(eventId)
-        setMessage({ tone: 'success', text: res.message })
+        setMessage({ tone: 'success', text: res?.message || 'RSVP confirmed! You are registered for this event.' })
       }
-      loadEvents()
+      await loadEvents()
     } catch (err) {
-      setMessage({ tone: 'error', text: err.message })
+      setMessage({ tone: 'error', text: err.message || 'Failed to update RSVP. Please try again.' })
     } finally {
       setBusyId(null)
     }
@@ -303,10 +304,18 @@ export default function Events() {
                   <Button
                     size="sm"
                     variant={evt.hasRsvpd ? "secondary" : "primary"}
-                    disabled={busyId === evt.id}
+                    disabled={busyId === evt.id || (!evt.hasRsvpd && evt.capacity && evt.attendeesCount >= evt.capacity)}
                     onClick={() => handleRsvpToggle(evt.id, evt.hasRsvpd)}
                   >
-                    {busyId === evt.id ? <Spinner /> : evt.hasRsvpd ? 'CANCEL RSVP' : 'RSVP NOW'}
+                    {busyId === evt.id ? (
+                      <Spinner />
+                    ) : evt.hasRsvpd ? (
+                      'CANCEL RSVP'
+                    ) : (evt.capacity && evt.attendeesCount >= evt.capacity) ? (
+                      'EVENT FULL'
+                    ) : (
+                      'RSVP NOW'
+                    )}
                   </Button>
                   <Link to={`/events/${evt.id}`}>
                     <Button size="sm" variant="ghost">DETAILS</Button>

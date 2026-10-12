@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { resumes, ai } from '../services/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -16,6 +16,7 @@ export default function Resume() {
   const [analyzing, setAnalyzing] = useState(false)
   const [aiAnalysis, setAiAnalysis] = useState(null)
   const [message, setMessage] = useState(null)
+  const fileInputRef = useRef(null)
 
   async function loadResume() {
     setLoading(true)
@@ -36,7 +37,45 @@ export default function Resume() {
 
   async function handleFileUpload(e) {
     const file = e.target.files?.[0]
+    // Reset input so selecting the same file again triggers onChange
+    if (e.target) e.target.value = ''
     if (!file) return
+
+    // 1. File size validation (5MB max limit)
+    const MAX_BYTES = 5 * 1024 * 1024
+    if (file.size > MAX_BYTES) {
+      setMessage({
+        tone: 'error',
+        text: `File exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please choose a smaller PDF or document.`,
+      })
+      return
+    }
+
+    if (file.size === 0) {
+      setMessage({
+        tone: 'error',
+        text: 'The selected file is empty. Please choose a valid PDF resume.',
+      })
+      return
+    }
+
+    // 2. MIME & extension validation
+    const allowedExtensions = ['.pdf', '.doc', '.docx']
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase()
+    const allowedMime = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]
+    if (!allowedExtensions.includes(ext) && !allowedMime.includes(file.type)) {
+      setMessage({
+        tone: 'error',
+        text: 'Unsupported file format. Please upload a PDF, DOC, or DOCX resume document.',
+      })
+      return
+    }
+
+    if (uploading) return
     setUploading(true)
     setMessage(null)
     try {
@@ -45,7 +84,7 @@ export default function Resume() {
       setMessage({ tone: 'success', text: 'Resume uploaded and analyzed successfully!' })
       setAiAnalysis(null)
     } catch (err) {
-      setMessage({ tone: 'error', text: err.message || 'Failed to upload resume' })
+      setMessage({ tone: 'error', text: err.message || 'Failed to upload resume. Please try again.' })
     } finally {
       setUploading(false)
     }
@@ -81,6 +120,16 @@ export default function Resume() {
 
   return (
     <div className="space-y-8">
+      {/* Hidden file input controlled via fileInputRef */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        onChange={handleFileUpload}
+        className="hidden"
+        disabled={uploading}
+      />
+
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase mb-2">
@@ -94,18 +143,13 @@ export default function Resume() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label className="inline-flex cursor-pointer">
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx"
-              onChange={handleFileUpload}
-              className="hidden"
-              disabled={uploading}
-            />
-            <Button as="span" variant="primary" disabled={uploading}>
-              {uploading ? <><Spinner /> Uploading...</> : 'UPLOAD NEW RESUME →'}
-            </Button>
-          </label>
+          <Button
+            variant="primary"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploading ? <><Spinner /> Uploading...</> : 'UPLOAD NEW RESUME →'}
+          </Button>
         </div>
       </header>
 
@@ -125,15 +169,13 @@ export default function Resume() {
             title="NO RESUME UPLOADED"
             description="Upload your PDF resume to automatically parse skills and attach it to job applications across the alumni network."
             action={
-              <label className="inline-flex cursor-pointer">
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <Button as="span">SELECT PDF RESUME</Button>
-              </label>
+              <Button
+                variant="primary"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? <><Spinner /> Uploading...</> : 'SELECT PDF RESUME'}
+              </Button>
             }
           />
         </Card>
