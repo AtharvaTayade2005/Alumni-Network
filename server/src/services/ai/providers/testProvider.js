@@ -31,35 +31,151 @@ export class TestProvider {
   }
 
   async generateText(promptOrOpts, _maybeSystemInstruction) {
-    const prompt = String(typeof promptOrOpts === 'object' && promptOrOpts !== null ? promptOrOpts.prompt : promptOrOpts || '')
-    const lower = prompt.toLowerCase()
+    const rawPrompt = String(
+      typeof promptOrOpts === 'object' && promptOrOpts !== null
+        ? promptOrOpts.prompt
+        : promptOrOpts || ''
+    )
 
-    if (lower.includes('backend development') || lower.includes('backend')) {
-      return `For backend development, I recommend mastering Node.js/Express, PostgreSQL relational schema design, REST/GraphQL APIs, and Docker containerization. Quantify latency improvements and build distributed caching solutions with Redis.`
+    // Extract the actual user query from structured prompt if present, avoiding system prompt pollution
+    const queryMatch = rawPrompt.match(/Current User Query:\s*([\s\S]*?)(?:\n\nPlease provide|\n\nRecent Conversation|$)/i)
+    const userQuery = (queryMatch ? queryMatch[1].trim() : rawPrompt.trim())
+    const qLower = userQuery.toLowerCase()
+
+    // 1. Resume / ATS / Review advice
+    if (/\b(resume|cv|ats|curriculum vitae)\b/i.test(qLower) || (/\b(review|format|template)\b/i.test(qLower) && !/\b(code|pr)\b/i.test(qLower))) {
+      return `Here is tailored guidance to optimize your resume for campus recruiters and Applicant Tracking Systems (ATS):
+
+1. **ATS Format & Structure:**
+   - Use a clean, single-column layout with standard headings: Summary, Technical Skills, Experience, Projects, and Education.
+   - Avoid tables, multi-column blocks, text boxes, graphics, and icons, which frequently cause ATS parser errors.
+   - Save and export as standard PDF or Word (.docx).
+
+2. **Quantifiable Bullet Points (STAR Method):**
+   - Begin each bullet with a strong action verb (e.g., *Architected*, *Engineered*, *Optimized*, *Automated*).
+   - Quantify results with engineering metrics (e.g., *"Reduced API response latency by 35% with Redis caching"* or *"Built REST API handling 5,000+ daily requests"*).
+
+3. **Skills Categorization:**
+   - Clearly group skills into Languages (JavaScript, TypeScript, Python), Frameworks & Libraries (React, Node.js, Express), Databases (PostgreSQL, MongoDB), and Tools/DevOps (Docker, Git, AWS).
+
+4. **Projects & Proof of Work:**
+   - Include direct GitHub repository links and live demonstration URLs for at least two comprehensive full-stack projects.
+
+Tip: You can use our built-in **Resume Analyzer** at \`/resume-analyzer\` for an automated ATS score, section breakdown, and detailed keyword gap analysis.`
     }
 
-    if (lower.includes('mentor') || lower.includes('guidance')) {
-      if (prompt.includes('Retrieved Platform Mentors')) {
-        return `Based on our verified alumni directory, I recommend booking a 1-on-1 session with the mentors displayed below. They have direct expertise in software engineering and can assist with technical roadmap reviews.`
+    // 2. React / Frontend / UI / Interview preparation
+    if (/\b(react|frontend|front-end|ui|vue|angular|css|html)\b/i.test(qLower) || (/\binterview\b/i.test(qLower) && !/\b(backend|cloud|devops)\b/i.test(qLower))) {
+      return `To thoroughly prepare for a modern React & Frontend Engineering interview, focus on these five core pillars:
+
+1. **JavaScript & TypeScript Fundamentals:**
+   - Master closures, the event loop, event delegation, hoisting, prototypes, and asynchronous JavaScript (\`Promises\`, \`async/await\`).
+   - Understand TypeScript fundamentals: interfaces, union types, generics, and strict type checking.
+
+2. **React Internals & Architecture:**
+   - **Virtual DOM & Reconciliation:** Understand fiber architecture, batching, and how React determines when to re-render.
+   - **Hooks In-Depth:** Explain mechanics and trade-offs of \`useState\`, \`useEffect\`, \`useMemo\`, \`useCallback\`, \`useRef\`, and creating custom hooks.
+   - **State Management:** When to use local state vs. React Context vs. external stores (Redux Toolkit, Zustand, or TanStack Query for server state).
+
+3. **Frontend System Design & Performance:**
+   - Component composition patterns, code-splitting with \`React.lazy\` and \`Suspense\`, bundle optimization, and image lazy-loading.
+   - Core Web Vitals: Largest Contentful Paint (LCP), Interaction to Next Paint (INP), and Cumulative Layout Shift (CLS).
+
+4. **Machine Coding & Practical Exercises:**
+   - Practice building standard components within a 45-minute window: Autocomplete search bar with debouncing, infinite scroll list with \`IntersectionObserver\`, and accessible modal dialogs.
+
+5. **Behavioral & Project Walkthrough:**
+   - Be prepared to discuss technical challenges: how you diagnosed a frontend memory leak, optimized render performance, or designed an accessible design system.`
+    }
+
+    // 3. Backend / Node.js / Database / API / System Architecture
+    if (/\b(backend|back-end|node|express|database|postgres|postgresql|sql|api|rest|graphql|redis|nosql)\b/i.test(qLower) && !/\b(job|jobs|opening|openings)\b/i.test(qLower)) {
+      return `For robust backend engineering, prioritize the following architecture, persistence, and scaling fundamentals:
+
+1. **Server Architecture & Runtime:**
+   - Node.js event-driven architecture, libuv thread pool, and handling asynchronous non-blocking I/O efficiently.
+   - Modular RESTful / GraphQL API design with clean controllers, service layers, and validation (e.g. Zod schemas).
+
+2. **Relational Database Mastery (PostgreSQL):**
+   - Database normalization (3NF), foreign keys, composite indexes, and transaction isolation levels (ACID).
+   - Profiling query performance with \`EXPLAIN ANALYZE\` and preventing N+1 query antipatterns.
+
+3. **Authentication & Security:**
+   - Secure JWT token architecture with short-lived access tokens and rotating refresh tokens stored in HTTP-only cookies.
+   - Rate limiting, password hashing (bcrypt/argon2), input sanitization, and CORS headers.
+
+4. **Caching & Asynchronous Queues:**
+   - In-memory caching with Redis (cache-aside pattern, TTL expiration, invalidation strategies).
+   - Background job processing and message queues (BullMQ, RabbitMQ) for asynchronous tasks like email dispatch.
+
+5. **Containerization & Deployment:**
+   - Multi-stage Docker builds to reduce image size, docker-compose orchestration, and CI/CD pipelines.`
+    }
+
+    // 4. Cloud Architecture / DevOps / AWS / Kubernetes / Docker
+    if (/\b(cloud|devops|aws|azure|gcp|docker|kubernetes|k8s|terraform|architecture)\b/i.test(qLower) && !/\b(job|jobs|opening|openings)\b/i.test(qLower) && !/\b(mentor|mentors|mentorship)\b/i.test(qLower)) {
+      return `For Cloud Architecture and DevOps engineering, here is a structured roadmap and advisory:
+
+1. **Cloud Core Services & Networking:**
+   - Compute: Elastic instances, container runtimes (ECS, EKS), and serverless functions (AWS Lambda).
+   - Networking & Security: Virtual Private Clouds (VPCs), subnets, NAT gateways, security groups, and IAM least-privilege policies.
+
+2. **Containerization & Orchestration:**
+   - Docker container packaging, multi-stage builds, and lightweight Alpine base images.
+   - Kubernetes architecture: Pods, Deployments, Services, Ingress controllers, and Helm charts for package management.
+
+3. **Infrastructure as Code (IaC):**
+   - Declarative infrastructure management with Terraform or AWS CDK. Maintain clean state backends and modular configurations.
+
+4. **Observability & SRE Best Practices:**
+   - Centralized logging, metrics collection (Prometheus, Grafana), health check probes, and distributed tracing.
+   - High availability patterns: multi-AZ deployments, auto-scaling groups, and automated database failover.`
+    }
+
+    // 5. Jobs / Openings / Hiring / Internships
+    if (/\b(jobs?|openings?|hiring|internships?|vacanc(?:y|ies)|positions?|opportunities)\b/i.test(qLower)) {
+      if (rawPrompt.includes('Retrieved Active Job Openings')) {
+        return `I found active opportunities on our platform job board matching your technical profile. Review the requirements on the Job Board and consider reaching out to alumni at those companies for referrals and application guidance.`
       }
-      return `I couldn't find an exact matching mentor in the current directory with that specific keyword, but you can explore our mentorship directory to connect with verified alumni.`
+      return `You can explore all active verified opportunities directly on our Job Board at \`/jobs\`. Partner companies and alumni regularly post internships, full-time positions, and referral opportunities across frontend, backend, cloud, and AI engineering.`
     }
 
-    if (lower.includes('job') || lower.includes('opening')) {
-      if (prompt.includes('Retrieved Active Job Openings')) {
-        return `I found active opportunities on our job board matching your technical profile. Review the requirements and reach out to alumni working at those companies for referrals.`
+    // 6. Mentors / Networking / Connections (explicitly requested)
+    if (/\b(mentors?|mentorship|networking|connect(?:ions?)?|advis(?:or|ing))\b/i.test(qLower)) {
+      if (rawPrompt.includes('Retrieved Platform Mentors')) {
+        return `Based on our verified alumni directory, I recommend booking a 1-on-1 session with the mentors displayed below. They have direct expertise in software engineering and cloud systems, and can assist with technical roadmap reviews, resume feedback, and mock interviews.`
       }
-      return `I couldn't find a strong matching job in the current job listings. Check back regularly as campus partners and alumni frequently post new openings.`
+      return `Our alumni network connects you with verified mentors working at top companies (including Google, Microsoft, and Atlassian). You can browse available mentors by domain, review their background, and request 1-on-1 sessions at \`/mentorship\`.`
     }
 
-    if (lower.includes('alumni') || lower.includes('people') || lower.includes('connect')) {
-      if (prompt.includes('Retrieved Platform Alumni')) {
-        return `Here are relevant alumni from our network who match your query. You can connect with them directly or view their full profiles to learn about their career trajectories.`
+    // 7. Alumni / Directory / People search
+    if (/\b(alumni|alumnus|alumna|graduates?|people|members?)\b/i.test(qLower)) {
+      if (rawPrompt.includes('Retrieved Platform Alumni')) {
+        return `Here are relevant alumni from our network matching your query. You can connect with them directly or view their full profiles to learn about their career trajectories.`
       }
-      return `I couldn't find any alumni matching that query in the directory right now. Try expanding your search terms or checking back later.`
+      return `You can search and filter verified alumni by department, graduation year, current company, and technical skills in our Alumni Directory at \`/alumni\`.`
     }
 
-    return `As your Career Advisor, I recommend strengthening core system fundamentals, building end-to-end fullstack projects, and networking with alumni in your target industry.`
+    // 8. AI / Machine Learning / Data Science
+    if (/\b(ai|artificial intelligence|machine learning|ml|deep learning|data science|nlp|llm)\b/i.test(qLower)) {
+      return `For aspiring AI and Machine Learning Engineers, here is a progressive skill roadmap:
+
+1. **Mathematical Foundations:** Linear algebra, multivariate calculus, probability distributions, and statistical hypothesis testing.
+2. **Data Processing & ML Libraries:** Python, NumPy, Pandas, Scikit-learn for supervised/unsupervised learning pipelines.
+3. **Deep Learning Frameworks:** PyTorch or TensorFlow for constructing neural networks, CNNs, and Transformer architectures.
+4. **LLM Applications & RAG:** Embeddings, vector stores, prompt engineering, and Retrieval-Augmented Generation architectures.
+5. **Production Deployment:** Serving models with FastAPI, containerizing inference endpoints, and monitoring model drift.`
+    }
+
+    // 9. General dynamic career guidance (no static canned mentor response)
+    return `Here is structured career and technical advice tailored to your query regarding "${userQuery}":
+
+1. **Core Technical Foundations:** Focus on mastering the key principles and primary programming tools in this domain before moving to advanced frameworks.
+2. **Hands-On Projects:** Build and deploy end-to-end applications demonstrating clean code architecture, error handling, and automated test coverage.
+3. **Portfolio & ATS Alignment:** Highlight quantifiable achievements in your resume and use our ATS Resume Analyzer to verify keyword coverage.
+4. **Community Engagement:** Connect with alumni and peers in your target companies through the portal to ask for roadmap advice and informational interviews.
+
+Explore our Job Readiness evaluator at \`/job-readiness\` or ATS Resume Analyzer at \`/resume-analyzer\` for further personalized insights.`
   }
 
   async generateStructured(promptOrOpts, _maybeSystemInstruction) {

@@ -75,19 +75,20 @@ export const aiService = {
 
     // 2. Classify intent to focus retrieval
     const msgLower = (message || '').toLowerCase()
-    const isAskingAlumni = /alumni|people|who works|connect|network|who can help|find someone/i.test(msgLower)
-    const isAskingMentors = /mentor|guidance|advis|1-on-1/i.test(msgLower)
-    const isAskingJobs = /job|opening|hiring|internship|role|vacancy|position|apply|career opportunity/i.test(msgLower)
+    const isAskingAlumni = /\b(alumni|alumnus|alumna|graduates?|who works|find someone)\b/i.test(msgLower)
+    const isAskingMentors = /\b(mentor|mentors|mentorship|advisory|1-on-1|network|networking|connect|connection|connections)\b/i.test(msgLower)
+    const isAskingJobs = /\b(jobs?|openings?|hiring|internships?|vacanc(?:y|ies)|positions?|open roles?)\b/i.test(msgLower)
+    const isAskingResume = /\b(resume|cv|ats|curriculum vitae)\b/i.test(msgLower)
 
     // 3. Execute targeted retrieval against real database records
     const [retrievedAlumni, retrievedMentors, retrievedJobs] = await Promise.all([
-      (isAskingAlumni || (!isAskingMentors && !isAskingJobs))
+      isAskingAlumni
         ? getAlumniRecommendations({ userId, queryText: message, skills: skillsList, limit: 3 })
         : Promise.resolve([]),
-      (isAskingMentors || (!isAskingAlumni && !isAskingJobs))
+      isAskingMentors
         ? getMentorRecommendations({ userId, queryText: message, skills: skillsList, limit: 3 })
         : Promise.resolve([]),
-      (isAskingJobs || (!isAskingAlumni && !isAskingMentors))
+      isAskingJobs
         ? getJobRecommendations({ userId, queryText: message, skills: skillsList, limit: 3 })
         : Promise.resolve([]),
     ])
@@ -116,32 +117,42 @@ export const aiService = {
     }
 
     const suggestedActions = []
-    if (retrievedMentors.length > 0) {
+    if (isAskingMentors && retrievedMentors.length > 0) {
       suggestedActions.push({
         label: `Request Mentorship: ${retrievedMentors[0].name}`,
         to: `/mentorship`,
       })
     }
-    if (retrievedJobs.length > 0) {
+    if (isAskingJobs && retrievedJobs.length > 0) {
       suggestedActions.push({
         label: `View ${retrievedJobs[0].title} (${retrievedJobs[0].companyName})`,
         to: `/jobs/${retrievedJobs[0].id}`,
       })
     }
-    if (retrievedAlumni.length > 0) {
+    if (isAskingAlumni && retrievedAlumni.length > 0) {
       suggestedActions.push({
         label: `View Profile: ${retrievedAlumni[0].name}`,
         to: `/alumni/${retrievedAlumni[0].id}`,
       })
     }
-    suggestedActions.push({
-      label: 'Evaluate Job Readiness',
-      to: '/job-readiness',
-    })
-    suggestedActions.push({
-      label: 'Check Resume ATS Score',
-      to: '/resume-analyzer',
-    })
+    if (isAskingResume) {
+      suggestedActions.push({
+        label: 'Run ATS Resume Scanner',
+        to: '/resume-analyzer',
+      })
+    }
+    if (/interview|readiness|roadmap|prepare|prep|skills?/i.test(msgLower)) {
+      suggestedActions.push({
+        label: 'Evaluate Job Readiness',
+        to: '/job-readiness',
+      })
+    }
+    if (suggestedActions.length === 0) {
+      suggestedActions.push(
+        { label: 'Evaluate Job Readiness', to: '/job-readiness' },
+        { label: 'Check Resume ATS Score', to: '/resume-analyzer' },
+      )
+    }
 
     return {
       text,

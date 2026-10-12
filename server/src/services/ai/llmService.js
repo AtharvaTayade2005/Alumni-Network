@@ -19,9 +19,11 @@ export async function generateText({ prompt, systemInstruction } = {}) {
     const provider = getAiProvider()
     return await provider.generateText(prompt, systemInstruction)
   } catch (err) {
-    logger.error('LLM generateText error', { message: err.message })
-    if (!config.isProduction && (err.statusCode === 429 || err.message?.toLowerCase().includes('quota'))) {
-      logger.warn('Remote AI quota exhausted. Falling back to local AI engine for development.')
+    logger.warn(`[AI Engine] Remote AI text generation error (${err.message}). Falling back to dynamic local AI engine.`, {
+      status: err.statusCode,
+      error: err.message,
+    })
+    if (!config.isProduction) {
       return await getFallbackProvider().generateText(prompt, systemInstruction)
     }
     if (err.statusCode) throw err
@@ -38,9 +40,11 @@ export async function generateStructured({ prompt, systemInstruction, fallback: 
     const provider = getAiProvider()
     return await provider.generateStructured(prompt, systemInstruction)
   } catch (err) {
-    logger.error('LLM generateStructured error', { message: err.message })
-    if (!config.isProduction && (err.statusCode === 429 || err.message?.toLowerCase().includes('quota'))) {
-      logger.warn('Remote AI quota exhausted. Falling back to local AI engine for development.')
+    logger.warn(`[AI Engine] Remote AI structured generation error (${err.message}). Falling back to dynamic local AI engine.`, {
+      status: err.statusCode,
+      error: err.message,
+    })
+    if (!config.isProduction) {
       return await getFallbackProvider().generateStructured(prompt, systemInstruction)
     }
     if (err.statusCode) throw err

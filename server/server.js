@@ -1,5 +1,5 @@
 import app from './src/app.js'
-import config from './src/config/env.js'
+import config, { verifyAiConfig } from './src/config/env.js'
 import { closePool } from './src/config/database.js'
 import { ensureDevDatabase, stopEmbeddedDevDatabase } from './src/config/devDbAutoStart.js'
 import { startScheduler, stopScheduler } from './src/services/scheduler.js'
@@ -9,6 +9,7 @@ await ensureDevDatabase()
 
 const server = app.listen(config.port, () => {
   console.log(`Alumni Network Portal API listening on port ${config.port}`)
+  verifyAiConfig()
 })
 
 // The websocket server shares the HTTP listener rather than opening a port of its

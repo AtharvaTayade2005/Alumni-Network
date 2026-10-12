@@ -186,11 +186,11 @@ export const config = {
   },
 
   ai: {
-    provider: process.env.AI_PROVIDER || 'test',
+    provider: process.env.AI_PROVIDER || 'gemini',
     gemini: {
       apiKey: process.env.GEMINI_API_KEY ?? '',
-      model: process.env.GEMINI_MODEL ?? 'gemini-1.5-flash',
-      embeddingModel: process.env.GEMINI_EMBEDDING_MODEL ?? 'text-embedding-004',
+      model: process.env.GEMINI_MODEL ?? 'gemini-3.5-flash',
+      embeddingModel: process.env.GEMINI_EMBEDDING_MODEL ?? 'gemini-embedding-001',
     },
     openai: {
       apiKey: process.env.OPENAI_API_KEY ?? '',
@@ -224,6 +224,25 @@ export function assertProductionConfig() {
   }
   if (config.jwt.accessSecret.length < 32 || config.jwt.refreshSecret.length < 32) {
     throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be at least 32 characters')
+  }
+}
+
+export function verifyAiConfig() {
+  const provider = (config.ai.provider || 'gemini').toLowerCase()
+  if (provider === 'gemini') {
+    if (!config.ai.gemini.apiKey || !config.ai.gemini.apiKey.trim()) {
+      console.warn('[AI Config] WARNING: AI_PROVIDER is set to "gemini" but GEMINI_API_KEY is missing or empty. The assistant will fall back to dynamic local engine.')
+    } else {
+      console.log(`[AI Config] AI provider initialized with Gemini (model: ${config.ai.gemini.model})`)
+    }
+  } else if (provider === 'openai') {
+    if (!config.ai.openai.apiKey || !config.ai.openai.apiKey.trim()) {
+      console.warn('[AI Config] WARNING: AI_PROVIDER is set to "openai" but OPENAI_API_KEY is missing or empty. The assistant will fall back to dynamic local engine.')
+    } else {
+      console.log(`[AI Config] AI provider initialized with OpenAI (model: ${config.ai.openai.model})`)
+    }
+  } else if (provider === 'test') {
+    console.log('[AI Config] AI provider explicitly set to "test" (offline dynamic engine).')
   }
 }
 

@@ -25,12 +25,26 @@ export function getAiProvider(forcedType = null) {
   }
 
   if (type === 'gemini') {
+    if (!config.ai.gemini.apiKey || !config.ai.gemini.apiKey.trim()) {
+      if (config.isProduction) {
+        throw new AppError(500, 'GEMINI_API_KEY is required in production when AI_PROVIDER is set to gemini.')
+      }
+      console.warn('[AI Provider] WARNING: GEMINI_API_KEY is not configured. Falling back to dynamic local testProvider.')
+      return new TestProvider()
+    }
     cachedProvider = new GeminiProvider()
     cachedProvider._type = 'gemini'
     return cachedProvider
   }
 
   if (type === 'openai') {
+    if (!config.ai.openai.apiKey || !config.ai.openai.apiKey.trim()) {
+      if (config.isProduction) {
+        throw new AppError(500, 'OPENAI_API_KEY is required in production when AI_PROVIDER is set to openai.')
+      }
+      console.warn('[AI Provider] WARNING: OPENAI_API_KEY is not configured. Falling back to dynamic local testProvider.')
+      return new TestProvider()
+    }
     cachedProvider = new OpenAIProvider()
     cachedProvider._type = 'openai'
     return cachedProvider

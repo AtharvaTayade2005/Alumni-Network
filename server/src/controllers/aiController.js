@@ -4,7 +4,8 @@ import { sendSuccess } from '../utils/response.js'
 import { getQuery, getParams } from '../middleware/validate.js'
 
 export const handleChat = asyncHandler(async (req, res) => {
-  const { message, history } = req.body
+  const message = typeof req.body?.message === 'string' ? req.body.message.trim() : (req.body?.message || '')
+  const history = Array.isArray(req.body?.history) ? req.body.history : []
   const result = await aiService.chat({
     user: req.user,
     message,

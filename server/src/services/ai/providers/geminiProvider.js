@@ -5,7 +5,7 @@ import logger from '../../../utils/logger.js'
 export class GeminiProvider {
   constructor(options = {}) {
     this.apiKey = options.apiKey || config.ai.gemini.apiKey
-    this.model = (options.model || config.ai.gemini.model || 'gemini-2.5-flash').replace(/^models\//, '')
+    this.model = (options.model || config.ai.gemini.model || 'gemini-3.5-flash').replace(/^models\//, '')
     this.embeddingModel = (options.embeddingModel || config.ai.gemini.embeddingModel || 'gemini-embedding-001').replace(/^models\//, '')
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta'
   }
@@ -30,7 +30,14 @@ export class GeminiProvider {
     const temperature = typeof promptOrOpts === 'object' ? promptOrOpts.temperature : undefined
     const maxTokens = typeof promptOrOpts === 'object' ? promptOrOpts.maxTokens : undefined
 
-    const candidateModels = Array.from(new Set([this.model, 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash'].filter(Boolean)))
+    const candidateModels = Array.from(new Set([
+      this.model,
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3-flash-preview',
+      'gemini-flash-latest',
+      'gemini-2.5-flash',
+    ].filter(Boolean)))
     let lastError = null
 
     for (const modelName of candidateModels) {
@@ -59,7 +66,7 @@ export class GeminiProvider {
         logger.warn(`Gemini text generation failed on model ${modelName}`, { status: response.status, message: msg })
         const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : (response.status === 404 ? 404 : 502)
         lastError = new AppError(statusCode, `AI Provider Error: ${msg}`)
-        if (response.status === 429 || response.status === 404 || response.status === 503) {
+        if (response.status === 429 || response.status === 404 || response.status === 503 || response.status >= 500) {
           continue
         }
         throw lastError
@@ -81,7 +88,14 @@ export class GeminiProvider {
       ? promptOrOpts.systemInstruction
       : maybeSystemInstruction) || ''
 
-    const candidateModels = Array.from(new Set([this.model, 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash'].filter(Boolean)))
+    const candidateModels = Array.from(new Set([
+      this.model,
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3-flash-preview',
+      'gemini-flash-latest',
+      'gemini-2.5-flash',
+    ].filter(Boolean)))
     let lastError = null
 
     for (const modelName of candidateModels) {
@@ -111,7 +125,7 @@ export class GeminiProvider {
         logger.warn(`Gemini structured generation failed on model ${modelName}`, { status: response.status, message: msg })
         const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : (response.status === 404 ? 404 : 502)
         lastError = new AppError(statusCode, `AI Provider Error: ${msg}`)
-        if (response.status === 429 || response.status === 404 || response.status === 503) {
+        if (response.status === 429 || response.status === 404 || response.status === 503 || response.status >= 500) {
           continue
         }
         throw lastError
