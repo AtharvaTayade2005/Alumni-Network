@@ -125,7 +125,17 @@ export const mentorshipRequestSchema = z.object({
 export const mentorshipRequestDefaults = { preferredMode: 'email' }
 
 export const mentorshipRespondSchema = z.object({
-  status: z.enum(['accepted', 'rejected']),
+  status: z.preprocess(
+    (v) => {
+      if (typeof v === 'string') {
+        const lower = v.toLowerCase()
+        if (lower === 'declined' || lower === 'rejected') return 'rejected'
+        if (lower === 'accepted') return 'accepted'
+      }
+      return v
+    },
+    z.enum(['accepted', 'rejected']),
+  ),
   responseNote: optionalText(1000),
 })
 

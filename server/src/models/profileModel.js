@@ -22,7 +22,8 @@ export async function upsertAlumniProfile(userId, data) {
        city, region, country, latitude, longitude,
        is_open_to_mentor, mentorship_capacity, show_on_map
      ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+       COALESCE($14, false), COALESCE($15, 1), COALESCE($16, false)
      )
      ON CONFLICT (user_id) DO UPDATE SET
        graduation_year = COALESCE(EXCLUDED.graduation_year, alumni_profiles.graduation_year),
@@ -37,9 +38,9 @@ export async function upsertAlumniProfile(userId, data) {
        country = COALESCE(EXCLUDED.country, alumni_profiles.country),
        latitude = COALESCE(EXCLUDED.latitude, alumni_profiles.latitude),
        longitude = COALESCE(EXCLUDED.longitude, alumni_profiles.longitude),
-       is_open_to_mentor = COALESCE(EXCLUDED.is_open_to_mentor, alumni_profiles.is_open_to_mentor),
-       mentorship_capacity = COALESCE(EXCLUDED.mentorship_capacity, alumni_profiles.mentorship_capacity),
-       show_on_map = COALESCE(EXCLUDED.show_on_map, alumni_profiles.show_on_map)
+       is_open_to_mentor = COALESCE($14, alumni_profiles.is_open_to_mentor),
+       mentorship_capacity = COALESCE($15, alumni_profiles.mentorship_capacity),
+       show_on_map = COALESCE($16, alumni_profiles.show_on_map)
      RETURNING *`,
     [
       userId,
@@ -55,9 +56,9 @@ export async function upsertAlumniProfile(userId, data) {
       data.country ?? null,
       data.latitude ?? null,
       data.longitude ?? null,
-      data.isOpenToMentor ?? false,
-      data.mentorshipCapacity ?? 1,
-      data.showOnMap ?? false,
+      data.isOpenToMentor !== undefined ? data.isOpenToMentor : (data.is_open_to_mentor !== undefined ? data.is_open_to_mentor : (data.mentorshipAvailable !== undefined ? data.mentorshipAvailable : null)),
+      data.mentorshipCapacity !== undefined ? data.mentorshipCapacity : (data.mentorship_capacity !== undefined ? data.mentorship_capacity : null),
+      data.showOnMap !== undefined ? data.showOnMap : (data.show_on_map !== undefined ? data.show_on_map : null),
     ],
   )
   return rows[0]

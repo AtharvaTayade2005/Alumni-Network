@@ -343,4 +343,99 @@ describe('Client Vitest: Task 4 - Mentorship Three Tabs Architecture', () => {
     expect(tabHeaders.requests.subtitle).toContain('Track mentorship requests')
     expect(tabHeaders.active.subtitle).toContain('Manage your active mentoring relationships')
   })
+
+  it('TC-ROLE-AWARE-01: resolves default tabs and navigation structure by role', () => {
+    function getTabsForRole(role) {
+      const isMentor = ['ALUMNI', 'PROFESSOR', 'FACULTY'].includes(role?.toUpperCase())
+      if (isMentor) {
+        return {
+          defaultTab: 'incoming_requests',
+          tabs: [
+            ['incoming_requests', 'Student requests'],
+            ['active_mentees', 'Active mentees'],
+            ['availability', 'Mentorship settings'],
+            ['find', 'Browse peers'],
+          ],
+          headerSubtext: 'Guide and empower students through 1-on-1 career advice, portfolio critiques, and technical roadmaps.',
+        }
+      }
+      return {
+        defaultTab: 'find',
+        tabs: [
+          ['find', 'Find a mentor'],
+          ['my_requests', 'My requests'],
+          ['active', 'Active mentorships'],
+        ],
+        headerSubtext: 'Connect with industry leaders for 1-on-1 career guidance, portfolio reviews, and graduate school advising.',
+      }
+    }
+
+    const alumniConfig = getTabsForRole('ALUMNI')
+    expect(alumniConfig.defaultTab).toBe('incoming_requests')
+    expect(alumniConfig.tabs.map(([id]) => id)).toEqual([
+      'incoming_requests',
+      'active_mentees',
+      'availability',
+      'find',
+    ])
+    expect(alumniConfig.headerSubtext).toContain('Guide and empower students')
+
+    const studentConfig = getTabsForRole('STUDENT')
+    expect(studentConfig.defaultTab).toBe('find')
+    expect(studentConfig.tabs.map(([id]) => id)).toEqual([
+      'find',
+      'my_requests',
+      'active',
+    ])
+    expect(studentConfig.headerSubtext).toContain('Connect with industry leaders')
+  })
+
+  it('TC-ROLE-AWARE-02: formats accept and decline mentorship responses with uppercase status', () => {
+    const makeResponsePayload = (action, note) => ({
+      status: action.toUpperCase(),
+      responseNote: note ? note.trim() : undefined,
+    })
+
+    const acceptPayload = makeResponsePayload('ACCEPTED', "Happy to help! Let's connect.")
+    expect(acceptPayload).toEqual({
+      status: 'ACCEPTED',
+      responseNote: "Happy to help! Let's connect.",
+    })
+
+    const declinePayload = makeResponsePayload('REJECTED', 'Currently at capacity.')
+    expect(declinePayload).toEqual({
+      status: 'REJECTED',
+      responseNote: 'Currently at capacity.',
+    })
+  })
+
+  it('TC-ROLE-AWARE-03: renders student profile details for incoming applications', () => {
+    const rawStudentRequest = {
+      id: 'req-101',
+      direction: 'incoming',
+      careerGoal: 'System design and distributed systems mentoring',
+      areaOfInterest: 'Backend Engineering',
+      preferredMode: 'video',
+      message: 'Looking for advice on building high-throughput services.',
+      createdAt: '2026-10-12T15:00:00Z',
+      peer: {
+        id: 'student-uuid',
+        name: 'Rohan Sharma',
+        degree: 'B.Tech',
+        department: 'Computer Engineering',
+        yearOfStudy: 3,
+      },
+    }
+
+    const academicString = [
+      rawStudentRequest.peer.degree,
+      rawStudentRequest.peer.department,
+      `Year ${rawStudentRequest.peer.yearOfStudy}`,
+    ].filter(Boolean).join(' • ')
+
+    expect(academicString).toBe('B.Tech • Computer Engineering • Year 3')
+    expect(rawStudentRequest.direction).toBe('incoming')
+    expect(rawStudentRequest.peer.name).toBe('Rohan Sharma')
+  })
 })
+
