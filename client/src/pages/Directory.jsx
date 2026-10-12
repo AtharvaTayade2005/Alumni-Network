@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { connections, directory } from '../services/api.js'
-import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Avatar, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field,
   Input, LoadingBlock, Pagination, Select, Spinner,
@@ -467,8 +466,6 @@ export default function Directory() {
                               disabled={busy[person.id]}
                             >
                               {busy[person.id] ? <Spinner /> : 'Connect'}
-                            </Button>
-                          )}
                             </Button>
                           )}
                         </div>
