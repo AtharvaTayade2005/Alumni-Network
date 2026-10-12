@@ -28,6 +28,9 @@ async function assertEligibleMentor(mentorId, menteeId) {
             EXISTS (SELECT 1 FROM user_roles ur
                     JOIN roles r ON r.id = ur.role_id
                     WHERE ur.user_id = u.id AND LOWER(r.name) = 'alumni') AS is_alumni,
+            EXISTS (SELECT 1 FROM user_roles ur
+                    JOIN roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = u.id AND LOWER(r.name) IN ('professor', 'faculty')) AS is_professor,
             EXISTS (SELECT 1 FROM student_profiles sp WHERE sp.user_id = u.id) AS is_student
      FROM users u
      LEFT JOIN alumni_profiles ap ON ap.user_id = u.id
@@ -39,19 +42,21 @@ async function assertEligibleMentor(mentorId, menteeId) {
   if (!mentor.is_active || mentor.is_suspended) {
     throw badRequest('That account is not available for mentorship')
   }
-  // A student account can never mentor, whatever its profile columns say.
-  if (!mentor.is_alumni || mentor.is_student) {
+  if (!mentor.is_alumni && !mentor.is_professor) {
     throw badRequest('Only an alumni member can offer mentorship')
   }
-  if (!mentor.is_open_to_mentor) {
-    throw badRequest('That member is not accepting mentorship requests right now')
-  }
-  if (mentor.verification_status !== 'verified') {
-    throw badRequest('That member is awaiting alumni verification')
+  if (!mentor.is_professor) {
+    if (!mentor.is_open_to_mentor) {
+      throw badRequest('That member is not accepting mentorship requests right now')
+    }
+    if (mentor.verification_status !== 'verified') {
+      throw badRequest('That member is awaiting alumni verification')
+    }
   }
 
   const active = await mentorshipModel.countActiveMentorships(mentorId)
-  if (active >= (mentor.mentorship_capacity ?? 1)) {
+  const maxCapacity = mentor.is_professor ? 20 : (mentor.mentorship_capacity ?? 1)
+  if (active >= maxCapacity) {
     throw badRequest('That mentor is already at capacity')
   }
   return mentor
@@ -96,7 +101,7 @@ export async function requestMentorship(menteeId, payload, context = {}) {
     throw forbidden('This member is not available for mentorship')
   }
   const connectionState = await connectionService.getRequestState(menteeId, mentorId)
-  if (connectionState !== 'connected') {
+  if (!mentor.is_professor && connectionState !== 'connected') {
     throw badRequest('Connect with this member before requesting mentorship')
   }
 

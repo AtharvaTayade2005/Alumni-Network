@@ -88,7 +88,12 @@ export default function EventDetails() {
             {event.title}
           </h1>
           <p className="font-mono text-xs text-swiss-muted mt-2">
-            Organized by {event.organizer} · Date: {new Date(event.date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} at {event.time} - {event.endTime}
+            Organized by {typeof event.organizer === 'object' ? (event.organizer?.name || 'Alumni Network') : (event.organizer || 'Alumni Network')} · Date: {(() => {
+              const d = event.date ? new Date(event.date) : (event.startTime ? new Date(event.startTime) : null)
+              return d && !isNaN(d.getTime())
+                ? d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+                : (event.date || 'Scheduled Event')
+            })()} at {event.time || '10:00 AM'}{event.endTime ? ` - ${event.endTime}` : ''}
           </p>
         </div>
 

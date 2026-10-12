@@ -151,12 +151,38 @@ export async function searchDirectory(filters) {
   )
 
   const userIds = rows.map((r) => r.id)
-  const skillMap = await getSkillMap(userIds)
+  const [skillMap, connectionMap] = await Promise.all([
+    getSkillMap(userIds),
+    getConnectionMap(filters.viewerId, userIds),
+  ])
 
   return {
-    rows: rows.map((r) => shapeDirectoryRow(r, skillMap)),
+    rows: rows.map((r) => shapeDirectoryRow(r, skillMap, connectionMap, filters.viewerId)),
     total: countRows[0].total,
   }
+}
+
+async function getConnectionMap(viewerId, userIds) {
+  if (!viewerId || !userIds.length) return new Map()
+  const { rows } = await query(
+    `SELECT requester_id, addressee_id, status
+     FROM connections
+     WHERE (requester_id = $1 AND addressee_id = ANY($2::UUID[]))
+        OR (addressee_id = $1 AND requester_id = ANY($2::UUID[]))`,
+    [viewerId, userIds],
+  )
+  const map = new Map()
+  for (const row of rows) {
+    const peerId = row.requester_id === viewerId ? row.addressee_id : row.requester_id
+    let state = 'none'
+    if (row.status === 'accepted') state = 'connected'
+    else if (row.status === 'blocked') state = 'blocked'
+    else if (row.status === 'pending') {
+      state = row.requester_id === viewerId ? 'pending_outgoing' : 'pending_incoming'
+    }
+    map.set(peerId, state)
+  }
+  return map
 }
 
 async function getSkillMap(userIds) {
@@ -177,11 +203,18 @@ async function getSkillMap(userIds) {
 }
 
 /** Applies each viewer's own privacy settings before data leaves the server. */
-function shapeDirectoryRow(row, skillMap) {
+function shapeDirectoryRow(row, skillMap, connectionMap = new Map(), viewerId = null) {
   const email = row.show_email ? row.email : null
   const phone = row.show_phone ? row.phone : null
   const showLocation = row.show_location
   const showEmployer = row.show_employer
+
+  let connectionState = 'none'
+  if (viewerId && row.id === viewerId) {
+    connectionState = 'self'
+  } else if (connectionMap.has(row.id)) {
+    connectionState = connectionMap.get(row.id)
+  }
 
   return {
     id: row.id,
@@ -208,6 +241,7 @@ function shapeDirectoryRow(row, skillMap) {
     skills: skillMap.get(row.id) ?? [],
     email,
     phone,
+    connectionState,
   }
 }
 

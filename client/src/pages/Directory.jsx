@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { connections, directory } from '../services/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Avatar, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field,
   Input, LoadingBlock, Pagination, Select, Spinner,
@@ -19,12 +20,15 @@ const emptyFilters = {
 }
 
 export default function Directory() {
+  const { user } = useAuth()
   const [filters, setFilters] = useState(emptyFilters)
   const [applied, setApplied] = useState({ ...emptyFilters, page: 1 })
   const [state, setState] = useState({ loading: true, error: null })
   const [result, setResult] = useState({ rows: [], meta: null })
   const [filterOptions, setFilterOptions] = useState(null)
   const [busy, setBusy] = useState({})
+  const [connectionStates, setConnectionStates] = useState({})
+  const [notice, setNotice] = useState(null)
 
   useEffect(() => {
     directory.filters()
@@ -47,7 +51,17 @@ export default function Directory() {
         page: criteria.page,
       }
       const response = await directory.search(params)
-      setResult({ rows: response.data ?? [], meta: response.meta ?? null })
+      const rows = response.data ?? []
+      setResult({ rows, meta: response.meta ?? null })
+      setConnectionStates((prev) => {
+        const next = { ...prev }
+        for (const person of rows) {
+          if (person.connectionState) {
+            next[person.id] = person.connectionState
+          }
+        }
+        return next
+      })
       setState({ loading: false, error: null })
     } catch (error) {
       setResult({ rows: [], meta: null })
@@ -71,11 +85,30 @@ export default function Directory() {
     setApplied((prev) => ({ ...prev, page }))
   }
 
-  async function connect(userId) {
+  async function connect(person) {
+    const userId = person.id
     setBusy((prev) => ({ ...prev, [userId]: 'request' }))
+    setNotice(null)
     try {
       await connections.request(userId)
+      setConnectionStates((prev) => ({ ...prev, [userId]: 'pending_outgoing' }))
+      setNotice({ tone: 'success', text: `Connection request sent to ${person.name}.` })
       await search(applied)
+    } catch (err) {
+      const msg = err.message || ''
+      if (
+        msg.toLowerCase().includes('already sent') ||
+        msg.toLowerCase().includes('already exists') ||
+        err.status === 409
+      ) {
+        setConnectionStates((prev) => ({ ...prev, [userId]: 'pending_outgoing' }))
+        setNotice({ tone: 'info', text: `Connection request is already pending with ${person.name}.` })
+      } else if (msg.toLowerCase().includes('already connected')) {
+        setConnectionStates((prev) => ({ ...prev, [userId]: 'connected' }))
+        setNotice({ tone: 'info', text: `You are already connected with ${person.name}.` })
+      } else {
+        setNotice({ tone: 'error', text: err.message || 'Failed to send connection request.' })
+      }
     } finally {
       setBusy((prev) => ({ ...prev, [userId]: null }))
     }
@@ -183,6 +216,12 @@ export default function Directory() {
         </Card>
 
         <Card className="overflow-hidden">
+          {notice && (
+            <div className="p-4 border-b border-swiss-border">
+              <Alert tone={notice.tone} onDismiss={() => setNotice(null)}>{notice.text}</Alert>
+            </div>
+          )}
+
           <div className="flex items-center justify-between border-b border-swiss-border px-5 py-3">
             <p className="text-sm text-swiss-muted">
               {state.loading ? 'Searching' : (
@@ -209,58 +248,75 @@ export default function Directory() {
           {!state.error && !state.loading && result.rows.length > 0 ? (
             <>
               <ul className="divide-y divide-swiss-border">
-                {result.rows.map((person) => (
-                  <li key={person.id} className="px-5 py-4">
-                    <div className="flex flex-wrap items-start gap-4">
-                      <Avatar name={person.name} src={person.avatarUrl} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            to={`/alumni/${person.id}`}
-                            className="font-medium text-swiss-text underline-offset-2 hover:underline"
-                          >
-                            {person.name}
-                          </Link>
-                          {person.verified ? <Badge tone="green">Verified</Badge> : null}
-                          {person.openToMentor ? (
-                            <Badge tone="blue">Open to mentor</Badge>
-                          ) : null}
-                        </div>
-                        <p className="mt-0.5 text-sm text-swiss-muted">
-                          {[person.currentPosition, person.currentCompany]
-                            .filter(Boolean).join(' at ') || 'No role listed'}
-                        </p>
-                        <p className="mt-0.5 text-xs text-swiss-label">
-                          {[
-                            person.degree,
-                            person.graduationYear ? `Class of ${person.graduationYear}` : null,
-                            person.yearOfStudy ? `Year ${person.yearOfStudy}` : null,
-                            [person.city, person.country].filter(Boolean).join(', '),
-                          ].filter(Boolean).join(' · ')}
-                        </p>
-                        {person.skills?.length ? (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {person.skills.slice(0, 6).map((skill) => (
-                              <Badge key={skill.id ?? skill.name}>{skill.name}</Badge>
-                            ))}
-                            {person.skills.length > 6 ? (
-                              <Badge tone="slate">+{person.skills.length - 6}</Badge>
+                {result.rows.map((person) => {
+                  const status = connectionStates[person.id] || person.connectionState || 'none'
+                  const isSelf = person.id === user?.id || status === 'self'
+
+                  return (
+                    <li key={person.id} className="px-5 py-4">
+                      <div className="flex flex-wrap items-start gap-4">
+                        <Avatar name={person.name} src={person.avatarUrl} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              to={`/alumni/${person.id}`}
+                              className="font-medium text-swiss-text underline-offset-2 hover:underline"
+                            >
+                              {person.name}
+                            </Link>
+                            {person.verified ? <Badge tone="green">Verified</Badge> : null}
+                            {person.openToMentor ? (
+                              <Badge tone="blue">Open to mentor</Badge>
                             ) : null}
                           </div>
-                        ) : null}
+                          <p className="mt-0.5 text-sm text-swiss-muted">
+                            {[person.currentPosition, person.currentCompany]
+                              .filter(Boolean).join(' at ') || 'No role listed'}
+                          </p>
+                          <p className="mt-0.5 text-xs text-swiss-label">
+                            {[
+                              person.degree,
+                              person.graduationYear ? `Class of ${person.graduationYear}` : null,
+                              person.yearOfStudy ? `Year ${person.yearOfStudy}` : null,
+                              [person.city, person.country].filter(Boolean).join(', '),
+                            ].filter(Boolean).join(' · ')}
+                          </p>
+                          {person.skills?.length ? (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {person.skills.slice(0, 6).map((skill) => (
+                                <Badge key={skill.id ?? skill.name}>{skill.name}</Badge>
+                              ))}
+                              {person.skills.length > 6 ? (
+                                <Badge tone="slate">+{person.skills.length - 6}</Badge>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2">
+                          {isSelf ? (
+                            <span className="inline-block px-2 py-1 text-[11px] font-mono uppercase font-bold text-swiss-muted bg-swiss-surface-alt border border-swiss-border rounded-xs">
+                              You
+                            </span>
+                          ) : status === 'connected' ? (
+                            <Badge tone="green">CONNECTED</Badge>
+                          ) : status === 'pending_outgoing' ? (
+                            <Badge tone="amber">PENDING</Badge>
+                          ) : status === 'pending_incoming' ? (
+                            <Badge tone="blue">REQUEST RECEIVED</Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => connect(person)}
+                              disabled={busy[person.id] === 'request'}
+                            >
+                              {busy[person.id] === 'request' ? <Spinner /> : 'Connect'}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="shrink-0">
-                        <Button
-                          size="sm"
-                          onClick={() => connect(person.id)}
-                          disabled={busy[person.id] === 'request'}
-                        >
-                          {busy[person.id] === 'request' ? <Spinner /> : 'Connect'}
-                        </Button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  )
+                })}
               </ul>
               <Pagination meta={result.meta} onChange={goToPage} />
             </>

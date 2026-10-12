@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { mentorship } from '../services/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import {
   Alert, Avatar, Badge, Button, Card, CardHeader, EmptyState, ErrorState,
   Field, Input, LoadingBlock, Select, Textarea, cx,
@@ -200,7 +201,7 @@ function MentorCard({ mentor, onRequested }) {
   )
 }
 
-function RequestCard({ request, onRespond, onCancel, busy }) {
+function RequestCard({ request, onRespond, onCancel, busy, isProfessor }) {
   const [note, setNote] = useState('')
   const incoming = request.direction === 'incoming'
 
@@ -209,15 +210,17 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
       <div className="mb-3 flex items-start gap-3">
         <PersonHeading
           peer={request.peer}
-          to={`/alumni/${request.peer?.id}`}
+          to={request.peer?.id ? `/messages/${request.peer.id}` : undefined}
           caption={incoming
-            ? 'Wants to mentor you'
+            ? (isProfessor ? `Student Advising (${request.peer?.currentCompany || 'Enrolled Student'})` : 'Wants to mentor you')
             : `You asked ${request.peer?.name ?? 'them'} to mentor you`}
         />
-        <Badge tone={STATUS_TONES[request.status] ?? 'slate'}>{request.status}</Badge>
+        <Badge tone={STATUS_TONES[request.status?.toLowerCase()] ?? 'slate'}>{request.status?.toUpperCase()}</Badge>
       </div>
 
       <DetailList items={[
+        ['Candidate', request.peer?.name],
+        ['Program / Cohort', request.peer?.currentCompany || 'Enrolled Student'],
         ['Career goal', request.careerGoal],
         ['Focus', request.areaOfInterest],
         ['Preferred mode', request.preferredMode],
@@ -226,23 +229,23 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
 
       {request.message ? (
         <p className="mt-3 border-l-2 border-swiss-border pl-3 text-sm italic text-swiss-muted">
-          {request.message}
+          &ldquo;{request.message}&rdquo;
         </p>
       ) : null}
 
-      {incoming && request.status === 'pending' ? (
+      {incoming && request.status?.toLowerCase() === 'pending' ? (
         <div className={cx(STACK, 'mt-4')}>
-          <Field label="Reply (optional)">
+          <Field label="Reply Note (optional)">
             <Input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={1000}
-              placeholder="Thanks for reaching out"
+              placeholder="e.g. Glad to guide you. Let's schedule an advising session."
             />
           </Field>
           <div className={ROW}>
             <Button onClick={() => onRespond(request.id, 'accepted', note)} disabled={busy}>
-              Accept
+              {isProfessor ? 'Accept Advising' : 'Accept'}
             </Button>
             <Button
               variant="secondary"
@@ -251,11 +254,16 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
             >
               Decline
             </Button>
+            {request.peer?.id && (
+              <Link to={`/messages/${request.peer.id}`}>
+                <Button variant="ghost">Message Student</Button>
+              </Link>
+            )}
           </div>
         </div>
       ) : null}
 
-      {!incoming && request.status === 'pending' ? (
+      {!incoming && request.status?.toLowerCase() === 'pending' ? (
         <div className={cx(ROW, 'mt-4')}>
           <Button variant="ghost" onClick={() => onCancel(request.id)} disabled={busy}>
             Cancel request
@@ -266,7 +274,7 @@ function RequestCard({ request, onRespond, onCancel, busy }) {
   )
 }
 
-function MentorshipCard({ item, onEnd, onComplete, busy }) {
+function MentorshipCard({ item, onEnd, onComplete, busy, isProfessor }) {
   const mine = item.role === 'mentor'
   const theyAre = [item.peer?.currentPosition, item.peer?.currentCompany]
     .filter(Boolean).join(' at ')
@@ -276,39 +284,71 @@ function MentorshipCard({ item, onEnd, onComplete, busy }) {
       <div className="mb-3 flex items-start gap-3">
         <PersonHeading
           peer={item.peer}
-          to={`/alumni/${item.peer?.id}`}
-          caption={mine ? 'You are mentoring' : 'You are being mentored'}
+          to={item.peer?.id ? `/messages/${item.peer.id}` : undefined}
+          caption={mine
+            ? (isProfessor ? `Student Mentee · ${item.peer?.currentCompany || 'Undergraduate'}` : 'You are mentoring')
+            : 'You are being mentored'}
         />
-        <Badge tone={STATUS_TONES[item.status] ?? 'slate'}>{item.status}</Badge>
+        <Badge tone={STATUS_TONES[item.status?.toLowerCase()] ?? 'slate'}>{item.status?.toUpperCase()}</Badge>
       </div>
 
       <DetailList items={[
         ['Started', formatDate(item.startedAt)],
         ['Ended', item.endedAt ? formatDate(item.endedAt) : null],
-        ['They are', theyAre],
+        ['Affiliation', theyAre || item.peer?.currentCompany || 'Enrolled Student'],
         ['Reason', item.endReason],
       ]} />
 
-      {item.status === 'active' ? (
-        <div className={cx(ROW, 'mt-4')}>
-          <Button variant="secondary" onClick={() => onComplete(item.id)} disabled={busy}>
-            Mark complete
-          </Button>
-          <Button variant="ghost" onClick={() => onEnd(item.id)} disabled={busy}>
-            End mentorship
-          </Button>
-        </div>
-      ) : null}
+      <div className={cx(ROW, 'mt-4')}>
+        {item.peer?.id && (
+          <Link to={`/messages/${item.peer.id}`}>
+            <Button size="sm" variant="secondary">Message Student</Button>
+          </Link>
+        )}
+        {item.status?.toLowerCase() === 'active' ? (
+          <>
+            <Button variant="secondary" onClick={() => onComplete(item.id)} disabled={busy}>
+              Mark complete
+            </Button>
+            <Button variant="ghost" onClick={() => onEnd(item.id)} disabled={busy}>
+              End mentorship
+            </Button>
+          </>
+        ) : null}
+      </div>
     </article>
   )
 }
 
 export default function Mentorship() {
+  const { user, role } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [tab, setTab] = useState(
-    () => new URLSearchParams(location.search).get('tab') || 'find',
-  )
+
+  const isProfessor = role === 'PROFESSOR' || role === 'FACULTY' ||
+    user?.role === 'professor' || user?.roles?.includes('PROFESSOR')
+
+  const tabs = isProfessor ? [
+    ['incoming', 'Advising Requests'],
+    ['active', 'Active Mentees'],
+    ['find', 'Faculty & Mentors'],
+  ] : [
+    ['find', 'Find a mentor'],
+    ['incoming', 'Requests'],
+    ['active', 'My mentorships'],
+  ]
+
+  const queryTab = new URLSearchParams(location.search).get('tab')
+  const defaultTab = isProfessor ? 'incoming' : 'find'
+  const [tab, setTab] = useState(() => queryTab || defaultTab)
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get('tab')
+    if (q && q !== tab) {
+      setTab(q)
+    }
+  }, [location.search])
+
   const [state, setState] = useState({
     mentors: [], requests: [], mentorships: [], loading: true, error: null,
   })
@@ -358,18 +398,22 @@ export default function Mentorship() {
   }
 
   const pendingCount = state.requests.filter(
-    (r) => r.direction === 'incoming' && r.status === 'pending',
+    (r) => r.direction === 'incoming' && r.status?.toLowerCase() === 'pending',
   ).length
-  const activeCount = state.mentorships.filter((m) => m.status === 'active').length
+  const activeCount = state.mentorships.filter((m) => m.status?.toLowerCase() === 'active').length
   const badges = { incoming: pendingCount, active: activeCount }
 
   return (
     <div className={STACK}>
       <header className="mb-4">
-        <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase mb-2">04 &mdash; MENTORSHIP</p>
-        <h1 className="text-3xl font-bold tracking-tight text-swiss-text">MENTORSHIP</h1>
+        <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase mb-2">04 &mdash; MENTORSHIP & ADVISING</p>
+        <h1 className="text-3xl font-bold tracking-tight text-swiss-text">
+          {isProfessor ? 'STUDENT ADVISING & MENTORSHIP' : 'MENTORSHIP'}
+        </h1>
         <p className="mt-2 text-sm text-swiss-muted">
-          Find an experienced alum, or help someone take their next step.
+          {isProfessor
+            ? 'Review incoming undergraduate guidance requests, coordinate research projects, and advise active mentees.'
+            : 'Find an experienced alum or faculty advisor, or help someone take their next step.'}
         </p>
       </header>
 
@@ -378,7 +422,7 @@ export default function Mentorship() {
       ) : null}
 
       <nav className={ROW} role="tablist">
-        {TABS.map(([value, label]) => (
+        {tabs.map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -445,6 +489,7 @@ export default function Mentorship() {
             <RequestCard
               key={request.id}
               request={request}
+              isProfessor={isProfessor}
               busy={busyId === request.id}
               onRespond={(id, status, note) => act(
                 id,
@@ -464,8 +509,8 @@ export default function Mentorship() {
             <Card>
               <EmptyState
                 title="No mentorships yet"
-                description="Accept a request to start one."
-                action={<Button onClick={() => changeTab('find')}>Find a mentor</Button>}
+                description={isProfessor ? "No active mentees currently. Accept an incoming advising request to begin." : "Accept a request to start one."}
+                action={<Button onClick={() => changeTab(isProfessor ? 'incoming' : 'find')}>{isProfessor ? 'View Advising Requests' : 'Find a mentor'}</Button>}
               />
             </Card>
           ) : null}
@@ -473,6 +518,7 @@ export default function Mentorship() {
             <MentorshipCard
               key={item.id}
               item={item}
+              isProfessor={isProfessor}
               busy={busyId === item.id}
               onComplete={(id) => act(id, () => mentorship.complete(id), 'Marked as complete')}
               onEnd={(id) => act(id, () => mentorship.end(id), 'Mentorship ended')}
