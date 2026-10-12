@@ -112,6 +112,9 @@ export default function JobReadiness() {
         regenerate,
       })
       setRoadmapData(newRoadmap)
+      if (newRoadmap) {
+        setReadinessData((prev) => (prev ? { ...prev, roadmap: newRoadmap } : prev))
+      }
     } catch (err) {
       setError(err?.message || 'Failed to generate personalized career roadmap.')
     } finally {

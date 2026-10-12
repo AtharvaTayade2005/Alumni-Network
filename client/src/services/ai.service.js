@@ -84,7 +84,7 @@ export const aiService = {
     if (jobId) params.set('jobId', jobId)
     const queryStr = params.toString() ? `?${params.toString()}` : ''
     const res = await api.get(`/ai/roadmap${queryStr}`)
-    return res?.data || res
+    return res && 'data' in res ? res.data : res
   },
 
   /**

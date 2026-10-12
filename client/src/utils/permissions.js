@@ -153,6 +153,93 @@ export function getRoleNavigation(role) {
   }
 }
 
+export function getCategorizedNavigation(role, user) {
+  const primaryRole = role || getUserPrimaryRole(user) || ROLES.STUDENT
+  const isAdmin = primaryRole === ROLES.ADMIN
+  const authUser = user || { roles: [primaryRole] }
+
+  const nav = [
+    {
+      type: 'link',
+      id: 'dashboard',
+      label: 'Dashboard',
+      to: isAdmin ? '/admin/dashboard' : '/dashboard',
+      end: true,
+    },
+    {
+      type: 'group',
+      id: 'explore',
+      label: 'Explore',
+      items: [
+        { to: '/directory', label: 'Alumni Directory', desc: 'Connect with alumni & peers' },
+        { to: '/mentorship', label: 'Mentorship', desc: 'Find or provide career guidance' },
+        ...(primaryRole === ROLES.PROFESSOR || isAdmin
+          ? [{ to: '/students', label: 'Students', desc: 'Student cohort directory' }]
+          : []),
+      ].filter((item) => canAccessRoute(authUser, item.to)),
+    },
+    {
+      type: 'group',
+      id: 'opportunities',
+      label: 'Opportunities',
+      items: [
+        { to: '/jobs', label: 'Jobs & Internships', desc: 'Browse curated career roles' },
+        ...(primaryRole === ROLES.STUDENT || isAdmin
+          ? [{ to: '/resume', label: 'Resume & CV', desc: 'Manage your verified profile' }]
+          : []),
+        { to: '/job-readiness', label: 'Job Readiness', desc: 'Skill gap benchmarks & roadmaps' },
+        ...(primaryRole === ROLES.ALUMNI || isAdmin
+          ? [{ to: '/donations', label: 'Giving & Donations', desc: 'Support scholarship funds' }]
+          : []),
+      ].filter((item) => canAccessRoute(authUser, item.to)),
+    },
+    {
+      type: 'group',
+      id: 'campus',
+      label: 'Campus',
+      items: [
+        { to: '/events', label: 'Campus Events', desc: 'Workshops, reunions & webinars' },
+        ...(primaryRole === ROLES.PROFESSOR || isAdmin
+          ? [{ to: '/announcements', label: 'Announcements', desc: 'Post and review broadcasts' }]
+          : []),
+      ].filter((item) => canAccessRoute(authUser, item.to)),
+    },
+    {
+      type: 'group',
+      id: 'ai',
+      label: 'AI Suite',
+      badge: 'AI',
+      items: [
+        { to: '/assistant', label: 'AI Assistant', desc: 'Interactive career guidance chat' },
+        { to: '/resume-analyzer', label: 'Resume Analyzer', desc: 'Real-time ATS scoring & tips' },
+        { to: '/job-readiness', label: 'Career Roadmaps', desc: 'Target role gap analysis' },
+        { to: '/semantic-search', label: 'Semantic Search', desc: 'AI-powered directory search' },
+      ].filter((item) => canAccessRoute(authUser, item.to)),
+    },
+  ]
+
+  if (isAdmin) {
+    nav.splice(1, 0, {
+      type: 'group',
+      id: 'admin',
+      label: 'Admin',
+      badge: 'SYS',
+      items: [
+        { to: '/admin/dashboard', label: 'Overview', desc: 'Platform operations summary' },
+        { to: '/admin/users', label: 'Users', desc: 'Account statuses & roles' },
+        { to: '/admin/verification', label: 'Verification', desc: 'Pending alumni approvals' },
+        { to: '/admin/jobs', label: 'Job Moderation', desc: 'Review & approve listings' },
+        { to: '/admin/events', label: 'Events Moderation', desc: 'Campus calendar approvals' },
+        { to: '/admin/donations', label: 'Donations', desc: 'Giving campaigns & history' },
+        { to: '/admin/analytics', label: 'Analytics', desc: 'Engagement metrics' },
+        { to: '/admin/audit-logs', label: 'Audit Logs', desc: 'Security & action tracking' },
+      ],
+    })
+  }
+
+  return nav.filter((entry) => entry.type === 'link' || (entry.items && entry.items.length > 0))
+}
+
 export function canAccessRoute(user, path) {
   if (!user) return false
   const primaryRole = getUserPrimaryRole(user)
