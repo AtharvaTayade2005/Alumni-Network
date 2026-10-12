@@ -5,8 +5,8 @@ import logger from '../../../utils/logger.js'
 export class GeminiProvider {
   constructor(options = {}) {
     this.apiKey = options.apiKey || config.ai.gemini.apiKey
-    this.model = options.model || config.ai.gemini.model
-    this.embeddingModel = options.embeddingModel || config.ai.gemini.embeddingModel
+    this.model = (options.model || config.ai.gemini.model || 'gemini-2.5-flash').replace(/^models\//, '')
+    this.embeddingModel = (options.embeddingModel || config.ai.gemini.embeddingModel || 'gemini-embedding-001').replace(/^models\//, '')
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta'
   }
 
