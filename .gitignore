@@ -46,4 +46,6 @@ server/.dev-postgres/
 # Local file storage (resume uploads, generated artefacts)
 server/storage/
 server/uploads/
+**/uploads/
+server/server/
 test-results/

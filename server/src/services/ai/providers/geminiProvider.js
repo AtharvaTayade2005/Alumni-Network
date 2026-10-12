@@ -30,36 +30,47 @@ export class GeminiProvider {
     const temperature = typeof promptOrOpts === 'object' ? promptOrOpts.temperature : undefined
     const maxTokens = typeof promptOrOpts === 'object' ? promptOrOpts.maxTokens : undefined
 
-    const url = `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`
-    const body = {
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: temperature ?? config.ai.temperature,
-        maxOutputTokens: maxTokens ?? config.ai.maxTokens,
-      },
+    const candidateModels = Array.from(new Set([this.model, 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash'].filter(Boolean)))
+    let lastError = null
+
+    for (const modelName of candidateModels) {
+      const url = `${this.baseUrl}/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(this.apiKey)}`
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: temperature ?? config.ai.temperature,
+          maxOutputTokens: maxTokens ?? config.ai.maxTokens,
+        },
+      }
+
+      if (systemInstruction) {
+        body.systemInstruction = { parts: [{ text: systemInstruction }] }
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}))
+        const msg = errJson?.error?.message || `Gemini API returned HTTP ${response.status}`
+        logger.warn(`Gemini text generation failed on model ${modelName}`, { status: response.status, message: msg })
+        const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : (response.status === 404 ? 404 : 502)
+        lastError = new AppError(statusCode, `AI Provider Error: ${msg}`)
+        if (response.status === 429 || response.status === 404 || response.status === 503) {
+          continue
+        }
+        throw lastError
+      }
+
+      const data = await response.json()
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      return text
     }
 
-    if (systemInstruction) {
-      body.systemInstruction = { parts: [{ text: systemInstruction }] }
-    }
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-
-    if (!response.ok) {
-      const errJson = await response.json().catch(() => ({}))
-      const msg = errJson?.error?.message || `Gemini API returned HTTP ${response.status}`
-      logger.error('Gemini text generation failed', { status: response.status, message: msg })
-      const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : 502
-      throw new AppError(statusCode, `AI Provider Error: ${msg}`)
-    }
-
-    const data = await response.json()
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    return text
+    throw lastError || new AppError(502, 'AI Provider Error: All Gemini candidate models failed')
   }
 
   async generateStructured(promptOrOpts, maybeSystemInstruction) {
@@ -70,43 +81,54 @@ export class GeminiProvider {
       ? promptOrOpts.systemInstruction
       : maybeSystemInstruction) || ''
 
-    const url = `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`
-    const body = {
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.2, // Lower temperature for structured extraction
-        maxOutputTokens: config.ai.maxTokens,
-        responseMimeType: 'application/json',
-      },
+    const candidateModels = Array.from(new Set([this.model, 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash'].filter(Boolean)))
+    let lastError = null
+
+    for (const modelName of candidateModels) {
+      const url = `${this.baseUrl}/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(this.apiKey)}`
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2, // Lower temperature for structured extraction
+          maxOutputTokens: config.ai.maxTokens,
+          responseMimeType: 'application/json',
+        },
+      }
+
+      if (systemInstruction) {
+        body.systemInstruction = { parts: [{ text: `${systemInstruction}\nReturn your answer strictly as a valid JSON object matching the requested schema.` }] }
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}))
+        const msg = errJson?.error?.message || `Gemini API returned HTTP ${response.status}`
+        logger.warn(`Gemini structured generation failed on model ${modelName}`, { status: response.status, message: msg })
+        const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : (response.status === 404 ? 404 : 502)
+        lastError = new AppError(statusCode, `AI Provider Error: ${msg}`)
+        if (response.status === 429 || response.status === 404 || response.status === 503) {
+          continue
+        }
+        throw lastError
+      }
+
+      const data = await response.json()
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
+      try {
+        return JSON.parse(rawText)
+      } catch {
+        // Clean possible markdown code fences
+        const cleaned = rawText.replace(/^```json/m, '').replace(/```$/m, '').trim()
+        return JSON.parse(cleaned)
+      }
     }
 
-    if (systemInstruction) {
-      body.systemInstruction = { parts: [{ text: `${systemInstruction}\nReturn your answer strictly as a valid JSON object matching the requested schema.` }] }
-    }
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-
-    if (!response.ok) {
-      const errJson = await response.json().catch(() => ({}))
-      const msg = errJson?.error?.message || `Gemini API returned HTTP ${response.status}`
-      logger.error('Gemini structured generation failed', { status: response.status, message: msg })
-      const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : 502
-      throw new AppError(statusCode, `AI Provider Error: ${msg}`)
-    }
-
-    const data = await response.json()
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
-    try {
-      return JSON.parse(rawText)
-    } catch {
-      // Clean possible markdown code fences
-      const cleaned = rawText.replace(/^```json/m, '').replace(/```$/m, '').trim()
-      return JSON.parse(cleaned)
-    }
+    throw lastError || new AppError(502, 'AI Provider Error: All Gemini candidate models failed')
   }
 
   async generateEmbedding(text) {

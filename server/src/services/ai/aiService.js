@@ -689,8 +689,8 @@ export const aiService = {
     const readiness = await this.analyzeCareer({ user, targetRole, jobId })
     const activeTargetRole = readiness.targetRole
 
-    // If not regenerating, check if user already has an existing roadmap for this role/job
-    if (!regenerate && readiness.roadmap) {
+    // If not regenerating, check if user already has an existing roadmap for this role/job with tasks
+    if (!regenerate && readiness.roadmap && Array.isArray(readiness.roadmap.tasks) && readiness.roadmap.tasks.length > 0) {
       return readiness.roadmap
     }
 

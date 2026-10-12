@@ -136,10 +136,13 @@ export class TestProvider {
     const isCareer = schemaName === 'career_analysis' || prompt.includes('skill gap and career readiness evaluation')
     if (isCareer) {
       const lower = prompt.toLowerCase()
-      const isBackend = lower.includes('backend')
-      const isDevOps = lower.includes('devops')
-      const isAI = lower.includes('ai') || lower.includes('machine learning')
-      const isFullStack = lower.includes('full stack') || lower.includes('fullstack')
+      const roleMatch = prompt.match(/Target Role:\s*([^\n\r]+)/i)
+      const roleText = (roleMatch ? roleMatch[1] : lower).toLowerCase()
+
+      const isFullStack = roleText.includes('full stack') || roleText.includes('fullstack')
+      const isBackend = !isFullStack && roleText.includes('backend')
+      const isDevOps = roleText.includes('devops')
+      const isAI = !isFullStack && /\b(ai|artificial intelligence|machine learning|ml engineer|data scientist)\b/i.test(roleText)
 
       if (isBackend) {
         return {
@@ -236,9 +239,84 @@ export class TestProvider {
     const isRoadmap = schemaName === 'roadmap_generation' || prompt.includes('progressive, personalized career learning roadmap')
     if (isRoadmap) {
       const lower = prompt.toLowerCase()
-      const isBackend = lower.includes('backend')
+      const roleMatch = prompt.match(/Target Role:\s*([^\n\r]+)/i)
+      const roleText = (roleMatch ? roleMatch[1] : lower).toLowerCase()
 
-      const roleStageTasks = isBackend ? [
+      const isFullStack = roleText.includes('full stack') || roleText.includes('fullstack')
+      const isBackend = !isFullStack && roleText.includes('backend')
+      const targetRoleTitle = isFullStack ? 'Full Stack Developer' : (isBackend ? 'Backend Developer' : 'Frontend Developer')
+
+      let roleStageTasks
+      if (isFullStack) {
+        roleStageTasks = [
+          {
+            stage: 'Foundations',
+            stageOrder: 1,
+            taskOrder: 1,
+            title: 'Modern TypeScript & Full-Stack Data Contracts',
+            description: 'Master strict typing across both client and server, sharing schema definitions with Zod.',
+            skillFocus: 'TypeScript & Node.js',
+            priority: 'high',
+            estimatedDuration: '1 week',
+            completionCriteria: ['Configure end-to-end type safety', 'Define API contracts with Zod validation', 'Eliminate untyped request/response boundaries'],
+            learningActivity: 'Study end-to-end type safety patterns and schema validation',
+            practiceProject: 'Build a typed API client and form validation pipeline',
+          },
+          {
+            stage: 'Core Skills',
+            stageOrder: 2,
+            taskOrder: 1,
+            title: 'Containerization, PostgreSQL Modeling & Caching',
+            description: 'Dockerize a multi-container stack with Express, PostgreSQL, and Redis caching.',
+            skillFocus: 'Docker & PostgreSQL',
+            priority: 'high',
+            estimatedDuration: '1-2 weeks',
+            completionCriteria: ['Write optimized Dockerfile and docker-compose.yml', 'Implement relational schema with indexes', 'Add Redis caching layer with TTL invalidation'],
+            learningActivity: 'Learn container networking, volumes, and relational query profiling',
+            practiceProject: 'Containerize an end-to-end full stack web application',
+          },
+          {
+            stage: 'Applied Projects',
+            stageOrder: 3,
+            taskOrder: 1,
+            title: 'Full-Stack Distributed Web Application with CI/CD',
+            description: 'Architect a production-grade full stack application with automated testing and continuous integration.',
+            skillFocus: 'React, Node.js & CI/CD',
+            priority: 'high',
+            estimatedDuration: '2 weeks',
+            completionCriteria: ['Set up GitHub Actions CI pipeline', 'Implement responsive UI with optimistic updates', 'Achieve >80% test coverage across client and server'],
+            learningActivity: 'Study CI/CD workflows and automated end-to-end test suites',
+            practiceProject: 'Deploy a full-stack platform with automated migrations and live health checks',
+          },
+          {
+            stage: 'Interview Preparation',
+            stageOrder: 4,
+            taskOrder: 1,
+            title: 'Full-Stack System Design & Architectural Trade-offs',
+            description: 'Master system design: load balancing, database indexing, caching strategies, and API security.',
+            skillFocus: 'System Design',
+            priority: 'medium',
+            estimatedDuration: '1-2 weeks',
+            completionCriteria: ['Diagram scalable three-tier architecture', 'Evaluate SQL vs NoSQL trade-offs', 'Present architectural case study'],
+            learningActivity: 'Practice system design interview questions and whiteboard architecture diagrams',
+            practiceProject: 'Draft detailed system architecture RFC for high-traffic real-time application',
+          },
+          {
+            stage: 'Job Application Readiness',
+            stageOrder: 5,
+            taskOrder: 1,
+            title: 'Production Portfolio Verification & Alumni Mentorship',
+            description: 'Deploy full-stack project with custom domain and schedule a mock interview with an alumni mentor.',
+            skillFocus: 'Career Strategy',
+            priority: 'medium',
+            estimatedDuration: '1 week',
+            completionCriteria: ['Publish live production demo with README architecture docs', 'Book 1-on-1 mock interview with an Alumni Mentor', 'Submit 3 tailored job applications'],
+            learningActivity: 'Refine technical portfolio and ATS resume format',
+            practiceProject: 'Publish live portfolio with demonstration links and GitHub repositories',
+          },
+        ]
+      } else if (isBackend) {
+        roleStageTasks = [
         {
           stage: 'Foundations',
           stageOrder: 1,
@@ -304,7 +382,9 @@ export class TestProvider {
           learningActivity: 'Prepare STAR-format behavioral examples and technical deep-dives',
           practiceProject: 'Publish live backend API demo on cloud with automated health check',
         },
-      ] : [
+      ]
+    } else {
+      roleStageTasks = [
         {
           stage: 'Foundations',
           stageOrder: 1,
@@ -371,9 +451,10 @@ export class TestProvider {
           practiceProject: 'Write technical engineering blog post breaking down an architectural challenge',
         },
       ]
+    }
 
       return {
-        summary: `Tailored 5-stage career progression roadmap designed to elevate technical competencies for ${isBackend ? 'Backend Developer' : 'Frontend Developer'}.`,
+        summary: `Tailored 5-stage career progression roadmap designed to elevate technical competencies for ${targetRoleTitle}.`,
         tasks: roleStageTasks,
       }
     }
