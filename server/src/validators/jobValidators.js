@@ -30,6 +30,7 @@ const STATUS_ALIASES = {
   LIVE: 'PUBLISHED',
   HIDDEN: 'REJECTED',
   REMOVED: 'REJECTED',
+  PENDING: 'PENDING_REVIEW',
 }
 
 function normaliseStatus(value, aliases = {}) {
@@ -166,6 +167,7 @@ export const jobQuerySchema = paged({
    *  lists expired roles sends readers to dead links. */
   openOnly: z.enum(['true', 'false']).default('true'),
   postedByMe: z.enum(['true', 'false']).optional(),
+  includePending: z.enum(['true', 'false']).optional(),
   /** Any state may be asked for; the service only allows it to staff, or to the
    *  poster asking for their own posting. */
   status: statusEnum(JOB_STATUSES, STATUS_ALIASES).optional(),
@@ -194,7 +196,7 @@ export const jobCloseSchema = z.object({
  * REJECTED; PATCH /:jobId/status is the fuller endpoint.
  */
 export const jobModerationSchema = z.object({
-  action: z.enum(['approve', 'remove']),
+  action: z.enum(['approve', 'remove', 'reject', 'flag']),
   reason: optionalText(1000),
 })
 

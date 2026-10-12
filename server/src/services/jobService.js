@@ -75,6 +75,7 @@ const JOB_TRANSITIONS = {
     PUBLISHED: { who: 'staff', decision: true },
   },
   REJECTED: {
+    PUBLISHED: { who: 'staff', decision: true },
     PENDING_REVIEW: { who: 'owner' },
   },
 }
@@ -329,11 +330,13 @@ export async function listJobs(viewer, filters) {
     throw forbidden('Only staff can list postings by state')
   }
 
+  const includePending = (filters.includePending === 'true' || filters.includePending === true) && isStaff(viewer)
   const { rows, total } = await jobModel.listJobs(viewer.id, {
     ...filters,
     postedByMe: mineOnly,
     openOnly: filters.openOnly === 'true',
     status: filters.status ? toStoredStatus(filters.status) : null,
+    includePending,
   })
   return { jobs: (await withSkills(rows)).map(jobModel.formatJob), ...pagination(filters, total) }
 }
@@ -437,8 +440,10 @@ export async function closeJob(user, jobId, context = {}) {
  * cannot drift apart.
  */
 export async function moderateJob(user, jobId, action, reason = null, context = {}) {
-  const target = action === 'remove' ? 'REJECTED' : 'PUBLISHED'
-  return changeJobStatus(user, jobId, target, reason, context)
+  const normAction = String(action).toLowerCase()
+  const target = (normAction === 'remove' || normAction === 'reject' || normAction === 'flag') ? 'REJECTED' : 'PUBLISHED'
+  const note = reason || (normAction === 'flag' ? 'Flagged for policy review' : normAction === 'reject' ? 'Rejected by administrator' : null)
+  return changeJobStatus(user, jobId, target, note, context)
 }
 
 export async function listCompanies(filters) {

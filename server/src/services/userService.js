@@ -162,10 +162,14 @@ export async function getDashboardStats() {
            FROM roles r
            LEFT JOIN user_roles ur ON ur.role_id = r.id
            GROUP BY r.name`),
-    query(`SELECT COUNT(*)::int AS pending FROM alumni_profiles WHERE verification_status = 'PENDING'`),
-    query(`SELECT COUNT(*)::int AS active FROM jobs WHERE status = 'published'`),
+    query(`SELECT COUNT(*)::int AS pending FROM alumni_profiles WHERE LOWER(verification_status) = 'pending'`),
+    query(`SELECT COUNT(*) FILTER (WHERE status = 'published')::int AS active,
+                  COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending
+           FROM jobs`),
     query(`SELECT COUNT(*)::int AS total FROM job_applications`),
-    query(`SELECT COUNT(*)::int AS published FROM events WHERE status = 'published'`),
+    query(`SELECT COUNT(*) FILTER (WHERE status = 'published')::int AS published,
+                  COUNT(*) FILTER (WHERE status = 'draft')::int AS pending
+           FROM events`),
     query(`SELECT COUNT(*)::int AS going FROM event_rsvps WHERE status = 'going'`),
     query(`SELECT COUNT(*)::int AS active FROM mentorship_relationships WHERE status = 'ACTIVE'`),
     query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(amount), 0)::numeric AS amount
@@ -182,10 +186,14 @@ export async function getDashboardStats() {
     activeUsers: userStats.rows[0]?.active ?? 0,
     totalAlumni: rolesMap[ROLES.ALUMNI] ?? 0,
     totalStudents: rolesMap[ROLES.STUDENT] ?? 0,
+    totalProfessors: rolesMap[ROLES.PROFESSOR] ?? 0,
     pendingVerification: verificationStats.rows[0]?.pending ?? 0,
+    pendingVerifications: verificationStats.rows[0]?.pending ?? 0,
     activeJobs: jobStats.rows[0]?.active ?? 0,
+    pendingJobs: jobStats.rows[0]?.pending ?? 0,
     applications: appStats.rows[0]?.total ?? 0,
     events: eventStats.rows[0]?.published ?? 0,
+    pendingEvents: eventStats.rows[0]?.pending ?? 0,
     rsvps: rsvpStats.rows[0]?.going ?? 0,
     mentorshipRelationships: mentorshipStats.rows[0]?.active ?? 0,
     donations: {

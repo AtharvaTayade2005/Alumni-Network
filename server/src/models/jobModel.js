@@ -54,6 +54,7 @@ export function formatJob(row) {
     applicationUrl: row.application_url,
     deadline: row.deadline,
     status: row.status ? row.status.toUpperCase() : null,
+    moderationStatus: row.status ? row.status.toLowerCase() : 'pending',
     publishedAt: row.published_at,
     moderation: row.moderated_by ? {
       moderatedBy: row.moderated_by,
@@ -257,6 +258,8 @@ export async function listJobs(viewerId, filters) {
   // caller's own view of their work and deliberately shows every state.
   if (filters.postedByMe) {
     add('j.posted_by = ?', viewerId)
+  } else if (filters.includePending) {
+    add("j.status IN ('published', 'pending_review')")
   } else if (filters.status) {
     add('j.status = ?', filters.status)
   } else {

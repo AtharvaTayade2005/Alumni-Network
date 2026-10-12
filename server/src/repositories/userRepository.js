@@ -9,7 +9,11 @@ import { ROLES } from '../middleware/rbac.js'
 
 const USER_SUMMARY_COLUMNS = `
   u.id, u.email, u.full_name, u.first_name, u.last_name,
-  u.account_status, u.is_email_verified, u.last_login_at, u.created_at,
+  u.account_status, u.is_active, u.is_suspended, u.is_email_verified, u.last_login_at, u.created_at,
+  COALESCE(ap.verification_status, 'unverified') AS verification_status,
+  COALESCE(ap.verification_status = 'verified', FALSE) AS verified,
+  COALESCE(ap.department, sp.department, '') AS department,
+  COALESCE(ap.graduation_year, sp.graduation_year, sp.expected_graduation, NULL) AS graduation_year,
   ARRAY_REMOVE(ARRAY_AGG(r.name) FILTER (WHERE r.name IS NOT NULL), NULL) AS roles
 `
 
@@ -55,10 +59,12 @@ export async function listUsers({ search, role, status, limit, offset }) {
   const { rows } = await query(
     `SELECT ${USER_SUMMARY_COLUMNS}
      FROM users u
+     LEFT JOIN alumni_profiles ap ON ap.user_id = u.id
+     LEFT JOIN student_profiles sp ON sp.user_id = u.id
      LEFT JOIN user_roles ur ON ur.user_id = u.id
      LEFT JOIN roles r ON r.id = ur.role_id
      ${where}
-     GROUP BY u.id
+     GROUP BY u.id, ap.verification_status, ap.department, sp.department, ap.graduation_year, sp.graduation_year, sp.expected_graduation
      ORDER BY u.created_at DESC
      LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params,
@@ -71,10 +77,12 @@ export async function findUserById(id) {
   const { rows } = await query(
     `SELECT ${USER_SUMMARY_COLUMNS}
      FROM users u
+     LEFT JOIN alumni_profiles ap ON ap.user_id = u.id
+     LEFT JOIN student_profiles sp ON sp.user_id = u.id
      LEFT JOIN user_roles ur ON ur.user_id = u.id
      LEFT JOIN roles r ON r.id = ur.role_id
      WHERE u.id = $1
-     GROUP BY u.id`,
+     GROUP BY u.id, ap.verification_status, ap.department, sp.department, ap.graduation_year, sp.graduation_year, sp.expected_graduation`,
     [id],
   )
   return rows[0] ?? null

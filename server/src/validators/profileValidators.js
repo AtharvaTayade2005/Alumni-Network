@@ -282,6 +282,7 @@ export const putStudentProfileSchema = z.object({
  */
 export const verifySchema = z.object({
   reason: z.string().trim().max(1000).optional().nullable(),
+  notes: z.string().trim().max(1000).optional().nullable(),
 })
 
 export const rejectReasonSchema = z.object({

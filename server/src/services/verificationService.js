@@ -57,7 +57,13 @@ export async function decide({ userId, status, reviewerId, reason = null }) {
 
     const previous = current.rows[0].verification_status
     if (previous === next && action !== 'submitted') {
-      throw conflict(`This alumni profile is already ${toApiStatus(next)}`)
+      return {
+        ...current.rows[0],
+        user_id: userId,
+        verification_status: previous,
+        alreadyVerified: next === STORED.VERIFIED,
+        alreadyRejected: next === STORED.REJECTED,
+      }
     }
 
     // Revoking verification also closes the mentor listing, because the

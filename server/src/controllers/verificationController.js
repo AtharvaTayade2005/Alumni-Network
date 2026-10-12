@@ -80,49 +80,64 @@ export const verify = asyncHandler(async (req, res) => {
     userId,
     status: 'VERIFIED',
     reviewerId: req.user.id,
-    reason: req.body?.reason ?? null,
+    reason: req.body?.reason ?? req.body?.notes ?? null,
   })
 
-  await auditService.record({
-    actorId: req.user.id,
-    action: AUDIT_ACTIONS.ALUMNI_VERIFIED,
-    entityType: 'alumni_profile',
-    entityId: userId,
-    metadata: { previousStatus: 'pending', newStatus: 'verified' },
-  })
+  if (!result.alreadyVerified) {
+    await auditService.record({
+      actorId: req.user.id,
+      action: AUDIT_ACTIONS.ALUMNI_VERIFIED,
+      entityType: 'alumni_profile',
+      entityId: userId,
+      metadata: { previousStatus: 'pending', newStatus: 'verified' },
+    })
+  }
 
   sendSuccess(res, {
     userId: result.user_id,
     status: verificationService.toApiStatus(result.verification_status),
+    alreadyVerified: Boolean(result.alreadyVerified),
     reviewer: result.verified_by,
     reviewedAt: result.verified_at,
-  }, { message: 'Alumni profile verified' })
+  }, {
+    message: result.alreadyVerified
+      ? 'This alumni profile is already VERIFIED; no further action required.'
+      : 'Alumni profile verified',
+  })
 })
 
 export const reject = asyncHandler(async (req, res) => {
   const { userId } = req.params
+  const reason = req.body?.reason ?? req.body?.notes ?? 'Rejected by administrator'
   const result = await verificationService.decide({
     userId,
     status: 'REJECTED',
     reviewerId: req.user.id,
-    reason: req.body?.reason,
+    reason,
   })
 
-  await auditService.record({
-    actorId: req.user.id,
-    action: AUDIT_ACTIONS.ALUMNI_REJECTED,
-    entityType: 'alumni_profile',
-    entityId: userId,
-    metadata: { previousStatus: 'pending', newStatus: 'rejected', reason: req.body.reason },
-  })
+  if (!result.alreadyRejected) {
+    await auditService.record({
+      actorId: req.user.id,
+      action: AUDIT_ACTIONS.ALUMNI_REJECTED,
+      entityType: 'alumni_profile',
+      entityId: userId,
+      metadata: { previousStatus: 'pending', newStatus: 'rejected', reason },
+    })
+  }
 
   sendSuccess(res, {
     userId: result.user_id,
     status: verificationService.toApiStatus(result.verification_status),
+    alreadyRejected: Boolean(result.alreadyRejected),
     reviewer: result.verified_by,
     reviewedAt: result.verified_at,
     reason: result.verification_notes,
-  }, { message: 'Alumni profile rejected' })
+  }, {
+    message: result.alreadyRejected
+      ? 'This alumni profile is already REJECTED; no further action required.'
+      : 'Alumni profile rejected',
+  })
 })
 
 /** A member may withdraw and resubmit their own verification request. */
