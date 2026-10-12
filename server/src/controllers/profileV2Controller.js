@@ -70,9 +70,9 @@ function alumniPayload(body) {
   set('region', body.region)
   set('country', body.country)
   set('bio', body.bio)
-  set('isOpenToMentor', body.mentorshipAvailable)
-  set('mentorshipCapacity', body.mentorshipCapacity)
-  set('showOnMap', body.showOnMap)
+  set('isOpenToMentor', body.isOpenToMentor ?? (body.is_open_to_mentor ?? body.mentorshipAvailable))
+  set('mentorshipCapacity', body.mentorshipCapacity ?? body.mentorship_capacity)
+  set('showOnMap', body.showOnMap ?? body.show_on_map)
   return payload
 }
 
@@ -91,7 +91,7 @@ function studentPayload(body) {
   // "I will mentor", and reading a student's willingness to be mentored that way
   // would let a student advertise as a mentor. A student's own flag is set
   // through openToMentorship.
-  set('isOpenToMentorship', body.openToMentorship)
+  set('isOpenToMentorship', body.isOpenToMentorship ?? (body.is_open_to_mentorship ?? body.openToMentorship))
   return payload
 }
 

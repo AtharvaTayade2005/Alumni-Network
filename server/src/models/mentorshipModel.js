@@ -16,8 +16,12 @@ const PEER_COLUMNS = `
   r.*,
   CASE WHEN r.mentor_id = $VIEWER THEN r.mentee_id ELSE r.mentor_id END AS peer_id,
   u.first_name || ' ' || u.last_name AS peer_name, u.avatar_url AS peer_avatar_url,
-  COALESCE(ap.current_company, sp.degree) AS peer_company,
-  ap.current_position AS peer_position, ap.graduation_year AS peer_graduation_year
+  COALESCE(ap.current_company, sp.degree, 'Student') AS peer_company,
+  COALESCE(ap.current_position, sp.department, CASE WHEN sp.year_of_study IS NOT NULL THEN 'Year ' || sp.year_of_study ELSE 'Student' END) AS peer_position,
+  ap.graduation_year AS peer_graduation_year,
+  sp.degree AS student_degree,
+  sp.department AS student_department,
+  sp.year_of_study AS student_year_of_study
 `
 
 const PEER_JOINS = `
@@ -312,6 +316,9 @@ export function formatRequest(row, viewerId) {
       currentCompany: row.peer_company,
       currentPosition: row.peer_position,
       graduationYear: row.peer_graduation_year,
+      degree: row.student_degree || row.peer_company,
+      department: row.student_department,
+      yearOfStudy: row.student_year_of_study,
     } : null,
   }
 }

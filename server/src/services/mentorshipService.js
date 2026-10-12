@@ -334,11 +334,14 @@ export async function listMentorships(userId, { status, limit = 50, offset = 0 }
     `SELECT rel.*,
             CASE WHEN rel.mentor_id = $1 THEN rel.mentee_id ELSE rel.mentor_id END AS peer_id,
             u.first_name || ' ' || u.last_name AS peer_name, u.avatar_url AS peer_avatar_url,
-            ap.current_company AS peer_company, ap.current_position AS peer_position
+            COALESCE(ap.current_company, sp.degree, 'Student') AS peer_company,
+            COALESCE(ap.current_position, sp.department, CASE WHEN sp.year_of_study IS NOT NULL THEN 'Year ' || sp.year_of_study ELSE 'Student' END) AS peer_position
      FROM mentorship_relationships rel
      JOIN users u ON u.id = CASE WHEN rel.mentor_id = $1 THEN rel.mentee_id ELSE rel.mentor_id END
      LEFT JOIN alumni_profiles ap
        ON ap.user_id = CASE WHEN rel.mentor_id = $1 THEN rel.mentee_id ELSE rel.mentor_id END
+     LEFT JOIN student_profiles sp
+       ON sp.user_id = CASE WHEN rel.mentor_id = $1 THEN rel.mentee_id ELSE rel.mentor_id END
      WHERE ${conditions.join(' AND ')}
      ORDER BY rel.started_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,

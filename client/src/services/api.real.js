@@ -151,6 +151,8 @@ export const mentorship = {
   },
   request: (payload) => api.post('/mentorship/requests', payload),
   respond: (requestId, payload) => api.patch(`/mentorship/requests/${requestId}`, payload),
+  accept: (requestId, payload) => api.patch(`/mentorship/requests/${requestId}/accept`, payload),
+  reject: (requestId, payload) => api.patch(`/mentorship/requests/${requestId}/reject`, payload),
   cancel: (requestId) => api.delete(`/mentorship/requests/${requestId}`),
   end: (relationshipId, endReason) =>
     api.patch(`/mentorship/mentorships/${relationshipId}/end`, { endReason }),
