@@ -27,12 +27,30 @@ export function cosineSimilarity(vecA, vecB) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB))
 }
 
+import config from '../../config/env.js'
+import logger from '../../utils/logger.js'
+import { TestProvider } from './providers/testProvider.js'
+
+let fallbackTestProvider = null
+function getFallbackProvider() {
+  if (!fallbackTestProvider) fallbackTestProvider = new TestProvider()
+  return fallbackTestProvider
+}
+
 /**
  * Generates an embedding vector for arbitrary text using the active AI provider.
  */
 export async function generateEmbedding(text) {
-  const provider = getAiProvider()
-  return provider.generateEmbedding(text)
+  try {
+    const provider = getAiProvider()
+    return await provider.generateEmbedding(text)
+  } catch (err) {
+    if (!config.isProduction && (err.statusCode === 429 || err.message?.toLowerCase().includes('quota'))) {
+      logger.warn('Remote AI embedding quota exhausted. Falling back to local AI engine for development.')
+      return await getFallbackProvider().generateEmbedding(text)
+    }
+    throw err
+  }
 }
 
 /**

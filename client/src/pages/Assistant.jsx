@@ -87,9 +87,9 @@ How can I assist your career journey today?`,
       }
       setMessages((prev) => [...prev, assistantMsg])
     } catch (err) {
-      let friendlyError = 'I ran into a temporary hiccup processing your request. Please try asking again.'
-      if (err?.status === 429) {
-        friendlyError = 'AI request limit reached. Please wait a moment before sending another query.'
+      let friendlyError = err?.message || 'I ran into a temporary hiccup processing your request. Please try asking again.'
+      if (err?.status === 429 || err?.message?.toLowerCase().includes('quota') || err?.message?.toLowerCase().includes('rate limit')) {
+        friendlyError = err?.message || 'AI request or quota limit reached. Please wait a moment before sending another query.'
       } else if (err?.status === 503) {
         friendlyError = 'The AI advisory service is currently unavailable. Please verify connection and retry.'
       }

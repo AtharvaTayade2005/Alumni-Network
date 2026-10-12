@@ -53,7 +53,8 @@ export class GeminiProvider {
       const errJson = await response.json().catch(() => ({}))
       const msg = errJson?.error?.message || `Gemini API returned HTTP ${response.status}`
       logger.error('Gemini text generation failed', { status: response.status, message: msg })
-      throw new AppError(502, `AI Provider Error: ${msg}`)
+      const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : 502
+      throw new AppError(statusCode, `AI Provider Error: ${msg}`)
     }
 
     const data = await response.json()
@@ -93,7 +94,8 @@ export class GeminiProvider {
       const errJson = await response.json().catch(() => ({}))
       const msg = errJson?.error?.message || `Gemini API returned HTTP ${response.status}`
       logger.error('Gemini structured generation failed', { status: response.status, message: msg })
-      throw new AppError(502, `AI Provider Error: ${msg}`)
+      const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : 502
+      throw new AppError(statusCode, `AI Provider Error: ${msg}`)
     }
 
     const data = await response.json()
@@ -125,7 +127,8 @@ export class GeminiProvider {
       const errJson = await response.json().catch(() => ({}))
       const msg = errJson?.error?.message || `Gemini Embedding API returned HTTP ${response.status}`
       logger.error('Gemini embedding generation failed', { status: response.status, message: msg })
-      throw new AppError(502, `AI Provider Error: ${msg}`)
+      const statusCode = response.status === 429 || msg.toLowerCase().includes('quota') ? 429 : 502
+      throw new AppError(statusCode, `AI Provider Error: ${msg}`)
     }
 
     const data = await response.json()
