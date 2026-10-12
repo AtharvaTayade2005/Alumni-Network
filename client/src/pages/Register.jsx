@@ -56,11 +56,22 @@ export default function Register() {
     if (err.status === 409 || err.code === 'CONFLICT' || err.message?.toLowerCase().includes('already exists')) {
       return 'An account with this email address already exists. Please sign in or use forgot password.'
     }
-    if (err.status === 503 || err.message?.toLowerCase().includes('database unavailable')) {
-      return 'Database service is temporarily unavailable. Please verify the PostgreSQL or PGlite server is running.'
+    if (
+      err.status === 503 ||
+      err.code === 'BACKEND_UNAVAILABLE' ||
+      err.message?.toLowerCase().includes('backend api server is unreachable') ||
+      err.message?.toLowerCase().includes('temporarily unavailable') ||
+      err.message?.toLowerCase().includes('database unavailable')
+    ) {
+      return err.message || 'The backend service is temporarily unavailable. Please verify that the backend API server (port 5000) and database are running.'
     }
     if (err.code === 'NETWORK_ERROR' || err.status === 0) {
       return 'Cannot reach the backend API at http://localhost:5000. Ensure the backend server is active.'
+    }
+    if (err.status >= 500) {
+      return err.message && err.message !== 'Request failed (500)'
+        ? err.message
+        : 'The server encountered an error processing registration. Please ensure the backend and database are running and try again.'
     }
     return err.message || 'An unexpected error occurred during account creation.'
   }

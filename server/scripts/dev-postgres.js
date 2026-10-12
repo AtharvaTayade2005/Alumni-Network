@@ -56,9 +56,16 @@ export async function startDevPg({
       const migFiles = (await fs.readdir(migrationsDir))
         .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
         .sort()
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          filename VARCHAR(255) PRIMARY KEY,
+          applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `)
       for (const file of migFiles) {
         const sql = await fs.readFile(path.join(migrationsDir, file), 'utf8')
         await db.exec(sql)
+        await db.query('INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING', [file])
       }
 
       const seedsDir = path.resolve(rootDir, '../database/seeds')
@@ -73,6 +80,7 @@ export async function startDevPg({
         { role: 'STUDENT', email: 'student.demo@alumniportal.test', first: 'Atharva', last: 'Patil' },
         { role: 'ALUMNI', email: 'alumni.demo@alumniportal.test', first: 'Aarav', last: 'Mehta' },
         { role: 'ADMIN', email: 'admin.demo@alumniportal.test', first: 'Portal', last: 'Administrator' },
+        { role: 'PROFESSOR', email: 'prof.kulkarni@alumniportal.test', first: 'Dr. Rajesh', last: 'Kulkarni' },
       ]
       for (const acc of accounts) {
         const res = await db.query(

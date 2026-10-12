@@ -1,5 +1,4 @@
 import { AppError } from '../utils/errors.js'
-import config from '../config/env.js'
 import logger from '../utils/logger.js'
 
 export function notFoundHandler(req, res, next) {
@@ -53,12 +52,18 @@ export function errorHandler(err, req, res, _next) {
     logger.warn('Request rejected', logContext)
   }
 
+  // For unexpected 500s that are not explicit AppErrors, provide a safe, user-friendly message
+  // and never leak internal stack traces, DB queries, or credentials to the client.
+  if (statusCode >= 500 && !(err instanceof AppError)) {
+    message = 'An unexpected internal server error occurred. Please try again later.'
+    code = 'INTERNAL_ERROR'
+  }
+
   // The documented envelope is { success:false, error:{ code, message, details } }.
   // `message` is also kept at the top level and details are mirrored to `errors`
   // because the existing frontend error handling reads those two locations.
   const error = { code, message }
   if (details) error.details = Array.isArray(details) ? details : [details]
-  if (!config.isProduction && statusCode >= 500) error.stack = err.stack
 
   const body = { success: false, message, error }
   if (error.details) body.errors = error.details

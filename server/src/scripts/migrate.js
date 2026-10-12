@@ -114,7 +114,7 @@ async function run({ up = true, steps = 1 } = {}) {
   return { applied, skipped: [] }
 }
 
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
+if (process.argv[1] && import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const revertMode = process.argv.includes('--down')
   const stepArg = process.argv.find((a) => a.startsWith('--steps='))
   const steps = stepArg ? Number.parseInt(stepArg.split('=')[1], 10) : 1

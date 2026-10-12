@@ -1,0 +1,16 @@
+{
+  "name": "alumni-network-portal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node scripts/start-dev.js",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "test": "npm --prefix server run test:auth && npm --prefix client run test",
+    "test:server": "npm --prefix server run test",
+    "test:client": "npm --prefix client run test",
+    "lint": "npm --prefix server run lint && npm --prefix client run lint"
+  }
+}

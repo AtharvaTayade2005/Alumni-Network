@@ -465,5 +465,35 @@ describe('Native MERN Stack Tests: Authentication & Registration', () => {
       assert.equal(logoutRes.status, 200)
       assert.equal(logoutRes.body.success, true)
     })
+
+    it('TC-AUTH-22: POST /api/auth/login rejects empty payload with 422 Unprocessable Entity', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({})
+
+      assert.equal(res.status, 422)
+      assert.equal(res.body.success, false)
+      assert.ok(res.body.errors || res.body.error?.details)
+    })
+
+    it('TC-AUTH-23: Centralized errorHandler sanitizes 500 error responses and never exposes stack traces', async () => {
+      // Simulate an unhandled server error via test route or handler
+      const { errorHandler } = await import('../src/middleware/errorHandler.js')
+      const mockReq = { method: 'POST', originalUrl: '/api/auth/login', user: null }
+      let statusSet = 0
+      let bodySent = null
+      const mockRes = {
+        status(code) { statusSet = code; return this },
+        json(body) { bodySent = body; return this },
+      }
+      const testErr = new Error('Database connection dropped unexpectedly')
+      errorHandler(testErr, mockReq, mockRes, () => {})
+
+      assert.equal(statusSet, 500)
+      assert.equal(bodySent.success, false)
+      assert.equal(bodySent.error.code, 'INTERNAL_ERROR')
+      assert.equal(bodySent.error.message, 'An unexpected internal server error occurred. Please try again later.')
+      assert.equal(bodySent.error.stack, undefined)
+    })
   })
 })

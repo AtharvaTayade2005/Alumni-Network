@@ -69,8 +69,17 @@ export default function Login() {
     if (err.status === 401 || err.code === 'UNAUTHENTICATED') {
       return 'Invalid email or password. Please verify your credentials and try again.'
     }
-    if (err.status === 503 || err.message?.toLowerCase().includes('database unavailable')) {
-      return 'Database service is temporarily unavailable. Please verify the PostgreSQL or PGlite server is running.'
+    if (err.status === 403 || err.code === 'FORBIDDEN') {
+      return err.message || 'Access denied for this account.'
+    }
+    if (
+      err.status === 503 ||
+      err.code === 'BACKEND_UNAVAILABLE' ||
+      err.message?.toLowerCase().includes('backend api server is unreachable') ||
+      err.message?.toLowerCase().includes('temporarily unavailable') ||
+      err.message?.toLowerCase().includes('database unavailable')
+    ) {
+      return err.message || 'The backend service is temporarily unavailable. Please verify that the backend API server (port 5000) and database are running.'
     }
     if (err.status === 408 || err.code === 'REQUEST_TIMEOUT') {
       return 'Sign-in request timed out. Please check your network and try again.'
@@ -80,6 +89,11 @@ export default function Login() {
     }
     if (err.status === 429) {
       return 'Too many sign-in attempts. Please wait a few moments before retrying.'
+    }
+    if (err.status >= 500) {
+      return err.message && err.message !== 'Request failed (500)'
+        ? err.message
+        : 'The server encountered an error processing sign-in. Please ensure the backend and database are running and try again.'
     }
     return err.message || 'An unexpected error occurred during sign in.'
   }

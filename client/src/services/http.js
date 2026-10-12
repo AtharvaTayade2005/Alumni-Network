@@ -100,9 +100,14 @@ export function normalizeFields(errors) {
 
 function toError(status, body) {
   const fields = normalizeFields(body?.errors || body?.error?.details)
-  const message = body?.message || body?.error?.message || `Request failed (${status})`
+  const fallbackMessage = status === 503
+    ? 'The service is temporarily unavailable. Please verify the backend API server is running.'
+    : (status >= 500
+      ? 'The server encountered an error processing your request. Please ensure the backend and database are running and try again.'
+      : `Request failed (${status})`)
+  const message = body?.message || body?.error?.message || fallbackMessage
   return new ApiError(status, message, {
-    code: body?.error?.code,
+    code: body?.error?.code || (status === 503 ? 'BACKEND_UNAVAILABLE' : (status >= 500 ? 'INTERNAL_ERROR' : undefined)),
     details: body?.error?.details,
     errors: fields,
   })

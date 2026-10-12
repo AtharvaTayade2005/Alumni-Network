@@ -62,4 +62,20 @@ describe('Client Vitest: Auth State & Token Regression Tests', () => {
     const isAuthedWhenAnonymous = status === 'authenticated' && Boolean(user) && Boolean(tokenStore.get())
     expect(isAuthedWhenAnonymous).toBe(false)
   })
+
+  it('TC-REG-05: ApiError distinguishes server 500 and 503 from normal errors', () => {
+    const internalErr = new ApiError(500, 'The server encountered an error processing your request. Please ensure the backend and database are running and try again.', {
+      code: 'INTERNAL_ERROR',
+    })
+    expect(internalErr.status).toBe(500)
+    expect(internalErr.code).toBe('INTERNAL_ERROR')
+    expect(internalErr.message).toContain('server encountered an error')
+
+    const unavailErr = new ApiError(503, 'The service is temporarily unavailable. Please verify the backend API server is running.', {
+      code: 'BACKEND_UNAVAILABLE',
+    })
+    expect(unavailErr.status).toBe(503)
+    expect(unavailErr.code).toBe('BACKEND_UNAVAILABLE')
+    expect(unavailErr.message).toContain('backend API server is running')
+  })
 })
