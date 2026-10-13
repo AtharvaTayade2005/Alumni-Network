@@ -66,11 +66,18 @@ export const close = asyncHandler(async (req, res) => {
 })
 
 export const moderate = asyncHandler(async (req, res) => {
+  const normAction = String(req.body.action || '').toLowerCase().trim()
   const job = await jobService.moderateJob(
-    req.user, getParams(req).jobId, req.body.action, req.body.reason, contextOf(req),
+    req.user, getParams(req).jobId, normAction, req.body.reason, contextOf(req),
   )
+  const actionMessages = {
+    approve: 'Posting approved',
+    remove: 'Posting removed',
+    reject: 'Posting rejected',
+    flag: 'Posting flagged for review',
+  }
   sendSuccess(res, job, {
-    message: req.body.action === 'remove' ? 'Posting removed' : 'Posting approved',
+    message: actionMessages[normAction] || 'Posting status updated',
   })
 })
 

@@ -196,7 +196,10 @@ export const jobCloseSchema = z.object({
  * REJECTED; PATCH /:jobId/status is the fuller endpoint.
  */
 export const jobModerationSchema = z.object({
-  action: z.enum(['approve', 'remove', 'reject', 'flag']),
+  action: z.preprocess(
+    (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
+    z.enum(['approve', 'remove', 'reject', 'flag']),
+  ),
   reason: optionalText(1000),
 })
 

@@ -160,6 +160,26 @@ describe('Admin Portal — Moderation, Verification, and Governance', () => {
     assert.equal(dbCheck.rows[0].status, 'rejected')
   })
 
+  it('allows authorized administrator to flag a job', async () => {
+    const admin = await createMember({ role: 'ADMIN' })
+    const poster = await createMember({ role: 'ALUMNI' })
+    const token = await tokenFor(admin)
+
+    const job = await createJob(poster.id, { status: 'published', moderatedBy: admin.id })
+
+    const modRes = await request(app)
+      .patch(`/api/jobs/${job.id}/moderate`)
+      .set(asAuth(token))
+      .send({ action: 'flag' })
+
+    assert.equal(modRes.status, 200)
+    assert.equal(modRes.body.data.status, 'REJECTED')
+    assert.match(modRes.body.message, /flagged/i)
+
+    const dbCheck = await query(`SELECT status FROM jobs WHERE id = $1`, [job.id])
+    assert.equal(dbCheck.rows[0].status, 'rejected')
+  })
+
   it('forbids ordinary users from moderating jobs', async () => {
     const admin = await createMember({ role: 'ADMIN' })
     const student = await createMember({ role: 'STUDENT' })

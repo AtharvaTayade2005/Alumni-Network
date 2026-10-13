@@ -373,13 +373,16 @@ export async function changeJobStatus(user, jobId, target, note = null, context 
     moderatedBy: allowed.decision ? user.id : null,
   })
 
+  const isFlagged = note && String(note).toLowerCase().includes('flag')
   await auditService.record({
     actorId: user.id,
-    action: to.toLowerCase() === 'published'
-        ? AUDIT_ACTIONS.JOB_APPROVED
-        : to.toLowerCase() === 'rejected'
-          ? AUDIT_ACTIONS.JOB_REJECTED
-          : AUDIT_ACTIONS[`JOB_${to.toUpperCase()}`] || AUDIT_ACTIONS.JOB_UPDATED,
+    action: isFlagged
+        ? AUDIT_ACTIONS.JOB_FLAGGED
+        : to.toLowerCase() === 'published'
+          ? AUDIT_ACTIONS.JOB_APPROVED
+          : to.toLowerCase() === 'rejected'
+            ? AUDIT_ACTIONS.JOB_REJECTED
+            : AUDIT_ACTIONS[`JOB_${to.toUpperCase()}`] || AUDIT_ACTIONS.JOB_UPDATED,
     entityType: 'job',
     entityId: jobId,
     metadata: { from, to, note },
@@ -401,10 +404,11 @@ export async function changeJobStatus(user, jobId, target, note = null, context 
  * in-app notification because notificationService checks the preference itself.
  */
 async function notifyPoster(job, posterId, decision, note) {
+  const isFlag = note && String(note).toLowerCase().includes('flag')
   await notificationService.notify({
     userId: posterId,
     type: 'job_moderated',
-    title: decision === 'published' ? 'Posting approved' : 'Posting not approved',
+    title: decision === 'published' ? 'Posting approved' : isFlag ? 'Posting flagged for review' : 'Posting not approved',
     body: note
       ? `Your posting for ${job.title} is now ${decision}: ${note}`
       : `Your posting for ${job.title} is now ${decision}`,

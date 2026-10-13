@@ -348,9 +348,9 @@ export default function Directory() {
         </Card>
 
         <Card className="overflow-hidden">
-          {notice && (
+          {message && (
             <div className="p-4 border-b border-swiss-border">
-              <Alert tone={notice.tone} onDismiss={() => setNotice(null)}>{notice.text}</Alert>
+              <Alert tone={message.tone} onDismiss={() => setMessage(null)}>{message.text}</Alert>
             </div>
           )}
 

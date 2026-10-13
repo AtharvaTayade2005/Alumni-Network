@@ -221,6 +221,9 @@ function filterClause(viewerId, filters) {
   } else if (!wantsAll) {
     // Drafts are the organizer's to manage; everybody else sees a live event.
     conditions.push(`(e.status <> 'draft' OR e.organizer_id = $1)`)
+  } else {
+    // When all statuses are requested, keep $1 bound so countEvents and listEvents parameter indexing is aligned
+    conditions.push('($1::text IS NOT NULL OR TRUE)')
   }
   if (status && !wantsAll) add('e.status = $?', status.toLowerCase())
   if (organizerId) add('e.organizer_id = $?', organizerId)
