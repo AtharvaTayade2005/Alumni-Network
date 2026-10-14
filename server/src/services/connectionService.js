@@ -3,6 +3,7 @@ import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js'
 import * as notificationService from './notificationService.js'
 import * as userModel from '../models/userModel.js'
 import * as profileModel from '../models/profileModel.js'
+import * as conversationModel from '../models/conversationModel.js'
 
 /**
  * Connections between members.
@@ -213,14 +214,16 @@ export async function sendRequest({ requesterId, addresseeId, message }) {
  * that did not happen.
  */
 export async function respond({ connectionId, userId, accept }) {
-  // The requester's address is read before the transaction opens. userModel uses
-  // the shared pool, and a query issued from inside the transaction would compete
-  // with it for the single development connection.
+  // Read users before the transaction opens: userModel uses the shared pool,
+  // and a pool query issued from inside the transaction would compete with it
+  // for the single development connection.
   const { rows: preview } = await query(
     'SELECT requester_id FROM connections WHERE id = $1', [connectionId],
   )
   const requesterId = preview[0]?.requester_id
   const requester = accept && requesterId ? await userModel.findById(requesterId) : null
+  const acceptor = accept && userId ? await userModel.findById(userId) : null
+  const acceptorName = acceptor ? `${acceptor.first_name} ${acceptor.last_name}` : 'A member'
 
   const { connection, notifiedUserId, notification } = await withTransaction(async (db) => {
     const { rows } = await db.query(
@@ -249,10 +252,10 @@ export async function respond({ connectionId, userId, accept }) {
         actorId: userId,
         type: 'connection_accepted',
         title: 'Connection accepted',
-        body: 'Someone accepted your connection request',
+        body: `${acceptorName} accepted your connection request`,
         link: `/alumni/${userId}`,
         email: requester?.email ?? null,
-        emailPayload: { withName: 'A member' },
+        emailPayload: { withName: acceptorName },
         db,
       })
     }
@@ -265,6 +268,14 @@ export async function respond({ connectionId, userId, accept }) {
   })
 
   await notificationService.emitStored(notifiedUserId, notification)
+
+  if (accept && requesterId) {
+    try {
+      await conversationModel.findOrCreateDirectConversation(userId, requesterId)
+    } catch {
+      // Non-blocking fallback
+    }
+  }
 
   return formatConnection(connection, userId)
 }

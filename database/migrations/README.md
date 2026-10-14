@@ -18,6 +18,12 @@ Plain SQL migrations applied in filename order. Each file has a matching
 | `011_networking_mentorship.sql` | Connection requests and mentorship lifecycle. |
 | `012_jobs_portal.sql` | Job postings, companies, applications, saved postings. |
 | `013_events_notifications_messaging.sql` | Conversations and their participants, read state on a participant row, the message backfill, notification dedupe keys and metadata, the background-job ledger, and the extra columns the event lifecycle needs (`published_at`, `cancelled_*`, `end_date`, check-in and notes). |
+| `014_donations_moderation_audit.sql` | Donations, payment transactions, donation receipts, content moderation, and audit logging. |
+| `015_ai_embeddings.sql` | Vector embeddings table for AI semantic search. |
+| `016_roles_professor.sql` | Professor and faculty roles. |
+| `017_career_roadmaps.sql` | Career roadmaps and task tracking tables. |
+| `018_announcements.sql` | Campus broadcast bulletins and announcements. |
+| `019_mentorship_settings_profiles.sql` | Dedicated settings and profile projection tables for multi-role interactions. |
 
 ## Applying migrations
 

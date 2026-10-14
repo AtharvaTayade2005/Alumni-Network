@@ -16,6 +16,7 @@
     "migrate:status": "node src/scripts/migrate-status.js",
     "seed": "node src/scripts/seed.js",
     "seed:users": "node src/scripts/seed-dev-users.js",
+    "seed:interactions": "node src/scripts/seed-roles-interactions.js",
     "db:seed:demo": "node src/scripts/seed-demo.js",
     "db:reset:demo": "node src/scripts/reset-demo.js",
     "db:reset": "node src/scripts/reset-db.js",
@@ -25,6 +26,7 @@
     "test:watch": "node --test --watch \"tests/**/*.test.js\"",
     "smoke": "node scripts/smoke.js",
     "verify:migrations": "node scripts/verify-migrations.mjs",
+    "verify:interactions": "node scripts/verify-all-role-interactions.mjs",
     "perf:directory": "node scripts/perf-directory.mjs"
   },
   "dependencies": {

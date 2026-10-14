@@ -26,7 +26,16 @@ export async function assertConversationMember(userId, peerId) {
          OR (requester_id = $2 AND addressee_id = $1))`,
     [userId, peerId],
   )
-  return conn.length > 0
+  if (conn.length > 0) return true
+
+  const { rows: mentorRel } = await query(
+    `SELECT 1 FROM mentorship_relationships
+     WHERE status = 'active'
+       AND ((mentor_id = $1 AND mentee_id = $2)
+         OR (mentor_id = $2 AND mentee_id = $1))`,
+    [userId, peerId],
+  )
+  return mentorRel.length > 0
 }
 
 /**

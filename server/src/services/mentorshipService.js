@@ -5,6 +5,7 @@ import * as userModel from '../models/userModel.js'
 import * as connectionService from './connectionService.js'
 import * as notificationService from './notificationService.js'
 import * as auditService from './auditService.js'
+import * as conversationModel from '../models/conversationModel.js'
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js'
 
 /**
@@ -216,6 +217,14 @@ export async function respondToRequest(mentorId, requestId, payload, context = {
   })
 
   await notificationService.emitStored(request.mentee_id, notification)
+
+  if (accepted) {
+    try {
+      await conversationModel.findOrCreateDirectConversation(mentorId, request.mentee_id)
+    } catch {
+      // Non-blocking fallback
+    }
+  }
 
   await auditService.record({
     actorId: mentorId,

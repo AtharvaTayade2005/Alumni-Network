@@ -89,16 +89,66 @@ const mentorshipModeSchema = z.enum(['email', 'chat', 'call', 'video'])
  * Exactly one spelling of each aliased pair must be present, which is why the
  * pair cannot simply be optional on both sides.
  */
-export const mentorshipRequestSchema = z.object({
+export const mentorshipRequestSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== 'object') return raw
+  const input = { ...raw }
+
+  // Harmonize mentorId vs mentor_id
+  if (!input.mentorId && input.mentor_id) {
+    input.mentorId = input.mentor_id
+  }
+
+  // Harmonize careerGoal vs career_goal / objective / goal
+  if (!input.careerGoal) {
+    input.careerGoal = input.career_goal || input.objective || input.goal
+  }
+
+  // Harmonize areaOfInterest vs interestArea vs area_of_interest / topics / topic
+  if (!input.areaOfInterest && !input.interestArea) {
+    const fallbackArea = input.area_of_interest || input.topics || input.topic || input.focusArea
+    if (typeof fallbackArea === 'string' && fallbackArea.trim()) {
+      input.areaOfInterest = fallbackArea.trim()
+    }
+  }
+
+  // Normalize preferredMode / preferredCommunication / preferred_mode
+  const rawMode = input.preferredMode || input.preferredCommunication || input.preferred_mode || input.mode
+  if (typeof rawMode === 'string') {
+    const lower = rawMode.toLowerCase().trim()
+    const mapped = (lower === 'in_person' || lower === 'any' || lower === 'no_preference') ? 'video' : lower
+    if (['email', 'chat', 'call', 'video'].includes(mapped)) {
+      if (input.preferredMode) input.preferredMode = mapped
+      if (input.preferredCommunication) input.preferredCommunication = mapped
+      if (!input.preferredMode && !input.preferredCommunication) input.preferredMode = mapped
+    }
+  }
+
+  // Harmonize message vs notes / note
+  if (input.message === undefined && input.notes !== undefined) {
+    input.message = input.notes
+  } else if (input.message === undefined && input.note !== undefined) {
+    input.message = input.note
+  }
+
+  return input
+}, z.object({
   mentorId: uuidSchema,
+  mentor_id: uuidSchema.optional(),
   careerGoal: z.string().trim().min(20, 'Describe your career goal in at least 20 characters').max(2000),
+  career_goal: z.string().trim().min(20, 'Describe your career goal in at least 20 characters').max(2000).optional(),
+  objective: z.string().trim().min(20, 'Describe your career goal in at least 20 characters').max(2000).optional(),
   interestArea: z.string().trim().min(2).max(150).optional(),
   areaOfInterest: z.string().trim().min(2).max(150).optional(),
+  area_of_interest: z.string().trim().min(2).max(150).optional(),
+  topics: z.string().trim().max(150).optional(),
   message: optionalText(2000),
+  notes: optionalText(2000),
   preferredCommunication: mentorshipModeSchema.optional(),
   preferredMode: mentorshipModeSchema.optional(),
+  preferred_mode: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (!data.interestArea && !data.areaOfInterest) {
+  const hasArea = Boolean((data.interestArea && data.interestArea.trim()) || (data.areaOfInterest && data.areaOfInterest.trim()))
+  if (!hasArea) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['interestArea'],
@@ -120,7 +170,7 @@ export const mentorshipRequestSchema = z.object({
       message: 'preferredCommunication and preferredMode disagree; send only one',
     })
   }
-})
+}))
 // Applied server-side so a missing preferredCommunication still defaults.
 export const mentorshipRequestDefaults = { preferredMode: 'email' }
 
