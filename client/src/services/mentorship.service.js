@@ -82,13 +82,14 @@ export const mentorshipService = {
     const session = await authService.getSession()
     const currentUser = session.data
     const users = db.get('users')
-    const mentorUser = users.find((u) => u.id === payload.mentorId)
+    const mentorId = payload.mentorId || payload.mentor_id
+    const mentorUser = users.find((u) => u.id === mentorId)
 
     const newRequest = {
       id: `mreq_${Date.now()}`,
-      mentorId: payload.mentorId,
+      mentorId,
       mentor: {
-        id: mentorUser?.id || payload.mentorId,
+        id: mentorUser?.id || mentorId,
         name: mentorUser?.name || 'Alumni Mentor',
         position: mentorUser?.headline || 'Mentor',
         company: mentorUser?.currentCompany || 'Company',
@@ -103,10 +104,10 @@ export const mentorshipService = {
         email: currentUser.email,
         avatarUrl: null,
       },
-      careerGoal: payload.careerGoal,
-      areaOfInterest: payload.areaOfInterest || 'General Mentorship',
-      preferredMode: payload.preferredMode || 'video',
-      message: payload.message || '',
+      careerGoal: payload.careerGoal || payload.career_goal || payload.objective || payload.goal,
+      areaOfInterest: payload.areaOfInterest || payload.interestArea || payload.topics || payload.topic || 'General Mentorship',
+      preferredMode: payload.preferredMode || payload.preferredCommunication || 'video',
+      message: payload.message || payload.notes || payload.note || '',
       status: 'pending',
       createdAt: new Date().toISOString(),
       respondedAt: null,
@@ -115,6 +116,14 @@ export const mentorshipService = {
 
     db.insert('mentorshipRequests', newRequest)
     return { data: newRequest, message: 'Mentorship request sent successfully' }
+  },
+
+  createRequest(payload) {
+    return this.request(payload)
+  },
+
+  requestMentorship(payload) {
+    return this.request(payload)
   },
 
   async respond(requestId, payload) {

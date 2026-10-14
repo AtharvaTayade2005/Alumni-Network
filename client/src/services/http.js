@@ -15,7 +15,7 @@ const ACCESS_TOKEN_KEY = 'anp.accessToken'
 const CSRF_COOKIE = 'csrf_token'
 
 export class ApiError extends Error {
-  constructor(status, message, { code, details, errors } = {}) {
+  constructor(status, message, { code, details, errors, data, response } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
@@ -23,6 +23,11 @@ export class ApiError extends Error {
     this.details = details
     /** Field-level messages from a 422, keyed by field name. */
     this.fields = errors ?? {}
+    this.data = data ?? details ?? errors
+    this.response = response || {
+      status,
+      data: data || (details ? { details, errors } : { message }),
+    }
   }
 
   get isUnauthorised() {
@@ -108,8 +113,13 @@ function toError(status, body) {
   const message = body?.message || body?.error?.message || fallbackMessage
   return new ApiError(status, message, {
     code: body?.error?.code || (status === 503 ? 'BACKEND_UNAVAILABLE' : (status >= 500 ? 'INTERNAL_ERROR' : undefined)),
-    details: body?.error?.details,
+    details: body?.error?.details || body?.errors,
     errors: fields,
+    data: body,
+    response: {
+      status,
+      data: body,
+    },
   })
 }
 

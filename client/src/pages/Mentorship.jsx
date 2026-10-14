@@ -37,10 +37,65 @@ const STUDENT_TABS = [
 
 const MODES = [
   ['video', 'Video call'],
-  ['chat', 'Chat'],
-  ['in_person', 'In person'],
-  ['any', 'No preference'],
+  ['chat', 'Chat message'],
+  ['call', 'Phone / Audio call'],
+  ['email', 'Email'],
 ]
+
+export function extractErrorMessage(err) {
+  if (!err) return null
+  if (typeof err === 'string') return err
+
+  // Check direct ApiError fields map
+  if (err.fields && typeof err.fields === 'object') {
+    const msgs = Object.values(err.fields).filter(Boolean)
+    if (msgs.length > 0) return msgs.join('. ')
+  }
+
+  // Check direct errors array
+  if (Array.isArray(err.errors) && err.errors.length > 0) {
+    const list = err.errors
+      .map((item) => (typeof item === 'string' ? item : item.message || item.msg || item.field))
+      .filter(Boolean)
+    if (list.length > 0) return list.join('. ')
+  }
+
+  // Check direct details array
+  if (Array.isArray(err.details) && err.details.length > 0) {
+    const list = err.details
+      .map((item) => (typeof item === 'string' ? item : item.message || item.msg || item.field))
+      .filter(Boolean)
+    if (list.length > 0) return list.join('. ')
+  }
+
+  // Check backend error response envelope
+  const resData = err.response?.data || err.data
+  if (resData) {
+    const list = resData.errors || resData.error?.details || resData.details
+    if (Array.isArray(list) && list.length > 0) {
+      return list
+        .map((item) => (typeof item === 'string' ? item : item.message || item.msg || item.field))
+        .filter(Boolean)
+        .join('. ')
+    }
+    if (typeof list === 'object' && list !== null) {
+      const msgs = Object.values(list).filter(Boolean)
+      if (msgs.length > 0) return msgs.join('. ')
+    }
+    if (resData.message && resData.message !== 'Validation failed') {
+      return resData.message
+    }
+    if (resData.error?.message && resData.error.message !== 'Validation failed') {
+      return resData.error.message
+    }
+  }
+
+  if (err.message && err.message !== 'Validation failed') {
+    return err.message
+  }
+
+  return 'Validation failed. Please verify the submitted information.'
+}
 
 const STATUS_TONES = {
   active: 'green',
@@ -107,9 +162,10 @@ function DetailList({ items }) {
 
 /** The request form shown inside a mentor card. */
 function RequestForm({ mentor, onDone, onCancel }) {
+  const defaultArea = mentor.industry || mentor.skills?.[0] || 'General Mentorship'
   const [form, setForm] = useState({
     careerGoal: '',
-    areaOfInterest: '',
+    areaOfInterest: defaultArea,
     message: '',
     preferredMode: 'video',
   })
@@ -118,36 +174,88 @@ function RequestForm({ mentor, onDone, onCancel }) {
 
   const set = (key) => (event) => setForm((f) => ({ ...f, [key]: event.target.value }))
 
+  const goalLength = form.careerGoal.trim().length
+  const isGoalTooShort = goalLength > 0 && goalLength < 20
+
   async function submit(event) {
     event.preventDefault()
+    const trimmedGoal = form.careerGoal.trim()
+    if (trimmedGoal.length < 20) {
+      setError(new Error(`Please describe what you want to achieve in at least 20 characters (currently ${trimmedGoal.length} characters).`))
+      return
+    }
+
     setBusy(true)
     setError(null)
     try {
-      await mentorship.request({ mentorId: mentor.id, ...form })
+      const payload = {
+        mentorId: mentor.id,
+        mentor_id: mentor.id,
+        careerGoal: trimmedGoal,
+        career_goal: trimmedGoal,
+        goal: trimmedGoal,
+        objective: trimmedGoal,
+        areaOfInterest: form.areaOfInterest.trim() || defaultArea,
+        interestArea: form.areaOfInterest.trim() || defaultArea,
+        area_of_interest: form.areaOfInterest.trim() || defaultArea,
+        topics: [form.areaOfInterest.trim() || defaultArea],
+        preferredMode: form.preferredMode || 'video',
+        preferredCommunication: form.preferredMode || 'video',
+        preferred_mode: form.preferredMode || 'video',
+        frequency: 'monthly',
+        preferred_frequency: 'monthly',
+        message: form.message.trim(),
+        notes: form.message.trim(),
+      }
+      await mentorship.request(payload)
       onDone()
     } catch (err) {
-      setError(err)
+      console.error('Mentorship error details:', err.response?.data || err)
+      const serverMessage = err.response?.data?.errors?.map((e) => `${e.path || e.param || e.field}: ${e.msg || e.message}`).join(', ')
+        || (err.fields ? Object.entries(err.fields).map(([k, v]) => `${k}: ${v}`).join(', ') : null)
+        || err.response?.data?.message
+        || err.message
+      setError(serverMessage)
     } finally {
       setBusy(false)
     }
   }
 
+  const errorMessage = typeof error === 'string' ? error : extractErrorMessage(error)
+
   return (
     <form className={STACK} onSubmit={submit}>
-      {error ? <Alert tone="error">{error.message}</Alert> : null}
+      {errorMessage ? <Alert tone="error">{errorMessage}</Alert> : null}
       <Field
         label="What do you want to achieve?"
-        hint="A sentence or two. At least 20 characters."
+        hint={
+          <span className={goalLength > 0 && goalLength < 20 ? 'text-amber-600 font-medium' : ''}>
+            A sentence or two describing your career goal. Minimum 20 characters ({goalLength}/20 characters).
+          </span>
+        }
         required
       >
-        <Textarea rows={3} value={form.careerGoal} onChange={set('careerGoal')} maxLength={1000} required />
+        <Textarea
+          rows={3}
+          value={form.careerGoal}
+          onChange={set('careerGoal')}
+          minLength={20}
+          maxLength={1000}
+          placeholder="e.g. Aspiring systems architect looking to master scalable backend design and high-throughput microservices."
+          required
+        />
+        {isGoalTooShort ? (
+          <p className="mt-1 text-xs text-amber-600 font-medium">
+            Please add {20 - goalLength} more character{20 - goalLength === 1 ? '' : 's'} to meet the 20-character requirement.
+          </p>
+        ) : null}
       </Field>
-      <Field label="Area of interest">
+      <Field label="Area of interest" hint="Topics or focus area for mentorship (defaults to mentor's domain)">
         <Input
           value={form.areaOfInterest}
           onChange={set('areaOfInterest')}
-          maxLength={200}
-          placeholder="e.g. Distributed systems, product management"
+          maxLength={150}
+          placeholder="e.g. Distributed systems, cloud architecture, system design"
         />
       </Field>
       <Field label="How would you like to meet?">
@@ -155,17 +263,19 @@ function RequestForm({ mentor, onDone, onCancel }) {
           {MODES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </Select>
       </Field>
-      <Field label="Introduce yourself">
+      <Field label="Introduce yourself (optional)">
         <Textarea
           rows={2}
           value={form.message}
           onChange={set('message')}
           maxLength={1000}
-          placeholder="Brief introduction for the mentor (optional)"
+          placeholder="Brief note or introduction for the mentor (optional)"
         />
       </Field>
       <div className={ROW}>
-        <Button type="submit" disabled={busy}>{busy ? 'Sending...' : 'Send request'}</Button>
+        <Button type="submit" disabled={busy || goalLength < 20}>
+          {busy ? 'Sending...' : 'Send request'}
+        </Button>
         <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
       </div>
     </form>
@@ -484,7 +594,7 @@ function MentorshipSettingsTab({ profile, onSaved, busy }) {
           </p>
         </div>
 
-        {error ? <Alert tone="error">{error.message || 'Failed to update settings'}</Alert> : null}
+        {error ? <Alert tone="error">{extractErrorMessage(error) || 'Failed to update settings'}</Alert> : null}
         {success ? <Alert tone="success" onDismiss={() => setSuccess(false)}>Your mentorship settings have been saved.</Alert> : null}
 
         {!isVerified ? (
@@ -655,7 +765,7 @@ export default function Mentorship() {
       setNotice({ tone: 'success', text: successMessage })
       await load()
     } catch (error) {
-      setNotice({ tone: 'error', text: error.message || 'Action failed' })
+      setNotice({ tone: 'error', text: extractErrorMessage(error) || 'Action failed' })
     } finally {
       setBusyId(null)
     }

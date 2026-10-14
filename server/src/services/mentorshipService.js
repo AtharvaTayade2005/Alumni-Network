@@ -64,15 +64,20 @@ async function assertEligibleMentor(mentorId, menteeId) {
 }
 
 export async function requestMentorship(menteeId, payload, context = {}) {
-  const {
-    mentorId,
-    careerGoal,
-    areaOfInterest,
-    interestArea = areaOfInterest,
-    message,
-    preferredMode,
-    preferredCommunication = preferredMode,
-  } = payload
+  const mentorId = payload.mentorId || payload.mentor_id
+  const careerGoal = payload.careerGoal || payload.career_goal || payload.goal || payload.objective
+  const areaOfInterest = payload.areaOfInterest || payload.interestArea || payload.area_of_interest || (Array.isArray(payload.topics) ? payload.topics.join(', ') : payload.topics) || 'General Mentorship'
+  const interestArea = payload.interestArea || areaOfInterest
+  const message = payload.message || payload.notes || payload.note || ''
+  const preferredMode = payload.preferredMode || payload.preferredCommunication || payload.preferred_mode || payload.mode || 'video'
+  const preferredCommunication = payload.preferredCommunication || preferredMode || 'video'
+
+  if (!mentorId) {
+    throw badRequest('Mentor ID is required')
+  }
+  if (!careerGoal) {
+    throw badRequest('Describe your career goal in at least 20 characters')
+  }
   if (mentorId === menteeId) {
     throw badRequest('You cannot request mentorship from yourself')
   }

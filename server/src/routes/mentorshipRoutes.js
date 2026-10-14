@@ -52,6 +52,8 @@ router.get('/mentors', validate({ query: mentorsQuerySchema }), controller.findM
 
 router.get('/requests', validate({ query: mentorshipQuerySchema }), controller.listRequests)
 router.post('/requests', validate({ body: mentorshipRequestSchema }), controller.request)
+router.get('/', validate({ query: mentorshipQuerySchema }), controller.listRequests)
+router.post('/', validate({ body: mentorshipRequestSchema }), controller.request)
 router.get('/requests/:id', validate({ params: idParamSchema }), controller.getRequest)
 router.patch(
   '/requests/:id/accept',

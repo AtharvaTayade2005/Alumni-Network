@@ -149,7 +149,37 @@ export const mentorship = {
     })) : []
     return { ...res, data: list }
   },
-  request: (payload) => api.post('/mentorship/requests', payload),
+  request: (payload) => {
+    const rawGoal = (payload.careerGoal || payload.career_goal || payload.goal || payload.objective || '').trim()
+    const rawArea = (payload.areaOfInterest || payload.interestArea || payload.topics || payload.topic || payload.area_of_interest || '').trim()
+    const area = rawArea || 'General Mentorship'
+    const rawMode = (payload.preferredMode || payload.preferredCommunication || payload.mode || 'video').toLowerCase()
+    const mode = ['email', 'chat', 'call', 'video'].includes(rawMode) ? rawMode : 'video'
+    const message = (payload.message || payload.notes || payload.note || '').trim()
+
+    const body = {
+      mentorId: payload.mentorId || payload.mentor_id,
+      mentor_id: payload.mentorId || payload.mentor_id,
+      careerGoal: rawGoal,
+      career_goal: rawGoal,
+      goal: rawGoal,
+      objective: rawGoal,
+      areaOfInterest: area,
+      interestArea: area,
+      area_of_interest: area,
+      topics: Array.isArray(payload.topics) ? payload.topics : [area],
+      preferredMode: mode,
+      preferredCommunication: mode,
+      preferred_mode: mode,
+      frequency: payload.frequency || payload.preferred_frequency || 'monthly',
+      preferred_frequency: payload.frequency || payload.preferred_frequency || 'monthly',
+      message,
+      notes: message,
+    }
+    return api.post('/mentorship/requests', body)
+  },
+  createRequest: (payload) => mentorship.request(payload),
+  requestMentorship: (payload) => mentorship.request(payload),
   respond: (requestId, payload) => api.patch(`/mentorship/requests/${requestId}`, payload),
   accept: (requestId, payload) => api.patch(`/mentorship/requests/${requestId}/accept`, payload),
   reject: (requestId, payload) => api.patch(`/mentorship/requests/${requestId}/reject`, payload),

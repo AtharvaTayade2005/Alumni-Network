@@ -2,11 +2,17 @@ import { ZodError } from 'zod'
 import { unprocessable } from '../utils/errors.js'
 
 function formatIssues(error) {
-  return error.issues.map((issue) => ({
-    field: issue.path.join('.') || '_root',
-    message: issue.message,
-    code: issue.code,
-  }))
+  return error.issues.map((issue) => {
+    const fieldName = issue.path.join('.') || '_root'
+    return {
+      field: fieldName,
+      path: fieldName,
+      param: fieldName,
+      message: issue.message,
+      msg: issue.message,
+      code: issue.code,
+    }
+  })
 }
 
 export function validate({ body, query, params }) {

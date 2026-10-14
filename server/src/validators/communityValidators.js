@@ -97,30 +97,57 @@ export const mentorshipRequestSchema = z.preprocess((raw) => {
   if (!input.mentorId && input.mentor_id) {
     input.mentorId = input.mentor_id
   }
-
-  // Harmonize careerGoal vs career_goal / objective / goal
-  if (!input.careerGoal) {
-    input.careerGoal = input.career_goal || input.objective || input.goal
+  if (!input.mentor_id && input.mentorId) {
+    input.mentor_id = input.mentorId
   }
 
-  // Harmonize areaOfInterest vs interestArea vs area_of_interest / topics / topic
-  if (!input.areaOfInterest && !input.interestArea) {
-    const fallbackArea = input.area_of_interest || input.topics || input.topic || input.focusArea
-    if (typeof fallbackArea === 'string' && fallbackArea.trim()) {
-      input.areaOfInterest = fallbackArea.trim()
+  // Harmonize careerGoal vs career_goal / objective / goal / message
+  const rawGoal = input.careerGoal ?? input.career_goal ?? input.goal ?? input.objective ?? (typeof input.message === 'string' && input.message.trim().length >= 20 ? input.message : undefined)
+  if (rawGoal !== undefined) {
+    const trimmed = typeof rawGoal === 'string' ? rawGoal.trim() : String(rawGoal)
+    input.careerGoal = trimmed
+    input.career_goal = trimmed
+    input.goal = trimmed
+    input.objective = trimmed
+  }
+
+  // Harmonize areaOfInterest vs interestArea vs area_of_interest / topics / topic / focusArea
+  let area = input.interestArea || input.areaOfInterest || input.area_of_interest || input.topic || input.focusArea
+  if (!area && input.topics) {
+    if (Array.isArray(input.topics)) {
+      area = input.topics.filter(Boolean).join(', ')
+    } else if (typeof input.topics === 'string') {
+      area = input.topics.trim()
     }
   }
+  if (Array.isArray(area)) {
+    area = area.filter(Boolean).join(', ')
+  }
+  if (typeof area === 'string' && area.trim()) {
+    area = area.trim()
+  } else {
+    area = 'General Mentorship'
+  }
 
-  // Normalize preferredMode / preferredCommunication / preferred_mode
-  const rawMode = input.preferredMode || input.preferredCommunication || input.preferred_mode || input.mode
+  input.interestArea = area
+  input.areaOfInterest = area
+  input.area_of_interest = area
+  if (!input.topics) {
+    input.topics = [area]
+  }
+
+  // Frequency
+  input.frequency = input.frequency || input.preferred_frequency || 'monthly'
+  input.preferred_frequency = input.frequency
+
+  // Normalize preferredMode / preferredCommunication / preferred_mode / mode
+  const rawMode = input.preferredCommunication || input.preferredMode || input.preferred_mode || input.mode
   if (typeof rawMode === 'string') {
     const lower = rawMode.toLowerCase().trim()
     const mapped = (lower === 'in_person' || lower === 'any' || lower === 'no_preference') ? 'video' : lower
-    if (['email', 'chat', 'call', 'video'].includes(mapped)) {
-      if (input.preferredMode) input.preferredMode = mapped
-      if (input.preferredCommunication) input.preferredCommunication = mapped
-      if (!input.preferredMode && !input.preferredCommunication) input.preferredMode = mapped
-    }
+    input.preferredMode = mapped
+    input.preferredCommunication = mapped
+    input.preferred_mode = mapped
   }
 
   // Harmonize message vs notes / note
@@ -135,12 +162,15 @@ export const mentorshipRequestSchema = z.preprocess((raw) => {
   mentorId: uuidSchema,
   mentor_id: uuidSchema.optional(),
   careerGoal: z.string().trim().min(20, 'Describe your career goal in at least 20 characters').max(2000),
-  career_goal: z.string().trim().min(20, 'Describe your career goal in at least 20 characters').max(2000).optional(),
-  objective: z.string().trim().min(20, 'Describe your career goal in at least 20 characters').max(2000).optional(),
+  career_goal: z.string().trim().optional(),
+  objective: z.string().trim().optional(),
+  goal: z.string().trim().optional(),
   interestArea: z.string().trim().min(2).max(150).optional(),
   areaOfInterest: z.string().trim().min(2).max(150).optional(),
   area_of_interest: z.string().trim().min(2).max(150).optional(),
-  topics: z.string().trim().max(150).optional(),
+  topics: z.union([z.string().trim().max(150), z.array(z.string())]).optional(),
+  frequency: z.string().optional(),
+  preferred_frequency: z.string().optional(),
   message: optionalText(2000),
   notes: optionalText(2000),
   preferredCommunication: mentorshipModeSchema.optional(),
@@ -153,21 +183,6 @@ export const mentorshipRequestSchema = z.preprocess((raw) => {
       code: z.ZodIssueCode.custom,
       path: ['interestArea'],
       message: 'interestArea is required',
-    })
-  }
-  if (data.interestArea && data.areaOfInterest && data.interestArea !== data.areaOfInterest) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['areaOfInterest'],
-      message: 'interestArea and areaOfInterest disagree; send only one',
-    })
-  }
-  if (data.preferredCommunication && data.preferredMode
-      && data.preferredCommunication !== data.preferredMode) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['preferredMode'],
-      message: 'preferredCommunication and preferredMode disagree; send only one',
     })
   }
 }))
