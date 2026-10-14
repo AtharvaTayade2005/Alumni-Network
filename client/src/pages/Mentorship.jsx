@@ -22,11 +22,18 @@ const MUTED = 'text-sm text-swiss-muted'
 const MUTED_SMALL = 'text-xs text-swiss-label'
 const FLUSH = 'rounded-sm border border-swiss-border bg-swiss-surface p-5'
 
-const MENTOR_TABS = [
-  ['incoming_requests', 'Student requests'],
+const ALUMNI_TABS = [
+  ['incoming_requests', 'Incoming requests'],
   ['active_mentees', 'Active mentees'],
+  ['find', 'Find faculty mentors'],
+  ['my_requests', 'My sent requests'],
   ['availability', 'Mentorship settings'],
-  ['find', 'Browse peers'],
+]
+
+const PROFESSOR_TABS = [
+  ['incoming_requests', 'Advising requests'],
+  ['active_mentees', 'Active mentees'],
+  ['availability', 'Faculty settings'],
 ]
 
 const STUDENT_TABS = [
@@ -282,10 +289,14 @@ function RequestForm({ mentor, onDone, onCancel }) {
   )
 }
 
-function MentorCard({ mentor, onRequested, isPeer = false }) {
+function MentorCard({ mentor, onRequested, canRequest = true }) {
   const [open, setOpen] = useState(false)
   const [done, setDone] = useState(false)
   const full = mentor.openSlots <= 0
+  const isProf = mentor.isProfessor || mentor.role === 'professor' || mentor.role === 'faculty'
+
+  const roleLabel = isProf ? 'Professor' : 'Alumni'
+  const defaultCaption = isProf ? 'University Professor & Faculty Advisor' : 'Alumni Mentor'
 
   return (
     <article className={FLUSH}>
@@ -294,11 +305,16 @@ function MentorCard({ mentor, onRequested, isPeer = false }) {
           peer={mentor}
           to={`/alumni/${mentor.id}`}
           caption={[mentor.currentPosition, mentor.currentCompany, mentor.graduationYear ? `Class of ${mentor.graduationYear}` : null]
-            .filter(Boolean).join(' at ') || 'Alumni mentor'}
+            .filter(Boolean).join(' at ') || defaultCaption}
           badge={
-            <Badge tone={full ? 'slate' : 'green'}>
-              {full ? 'No open slots' : `${mentor.openSlots} open slot${mentor.openSlots === 1 ? '' : 's'}`}
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              <Badge tone={isProf ? 'purple' : 'blue'}>
+                {roleLabel}
+              </Badge>
+              <Badge tone={full ? 'slate' : 'green'}>
+                {full ? 'No open slots' : `${mentor.openSlots} open slot${mentor.openSlots === 1 ? '' : 's'}`}
+              </Badge>
+            </div>
           }
         />
       </div>
@@ -318,11 +334,11 @@ function MentorCard({ mentor, onRequested, isPeer = false }) {
         />
       ) : (
         <div className={ROW}>
-          {!isPeer ? (
+          {canRequest ? (
             <Button onClick={() => setOpen(true)} disabled={full}>Request mentorship</Button>
           ) : null}
           <Link to={`/alumni/${mentor.id}`}>
-            <Button variant={isPeer ? 'primary' : 'secondary'}>View profile →</Button>
+            <Button variant={canRequest ? 'secondary' : 'primary'}>View profile →</Button>
           </Link>
         </div>
       )}
@@ -334,11 +350,14 @@ function MentorCard({ mentor, onRequested, isPeer = false }) {
 function StudentRequestCard({ request, onRespond, busy }) {
   const [note, setNote] = useState('')
   const peer = request.peer
+  const rawRole = peer?.role || (peer?.yearOfStudy || peer?.department ? 'Student' : 'Alumni')
+  const roleDisplay = rawRole.charAt(0).toUpperCase() + rawRole.slice(1).toLowerCase()
+
   const academicDetails = [
-    peer?.degree,
     peer?.department,
-    peer?.yearOfStudy ? `Year ${peer.yearOfStudy}` : null,
-  ].filter(Boolean).join(' • ') || 'Student Scholar'
+    peer?.degree,
+    peer?.yearOfStudy ? `Year ${peer.yearOfStudy}` : (peer?.currentCompany ? `at ${peer.currentCompany}` : null),
+  ].filter(Boolean).join(' • ') || (roleDisplay === 'Student' ? 'Student Scholar' : 'Alumni Member')
 
   const modeLabel = MODES.find(([val]) => val === request.preferredMode)?.[1] || request.preferredMode || 'Video call'
 
@@ -350,16 +369,22 @@ function StudentRequestCard({ request, onRespond, busy }) {
           to={`/alumni/${peer?.id}`}
           caption={academicDetails}
           badge={
-            <Badge tone={STATUS_TONES[request.status?.toLowerCase()] ?? 'slate'}>
-              {request.status?.toUpperCase()}
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              <Badge tone={roleDisplay.toLowerCase() === 'student' ? 'blue' : 'amber'}>
+                {roleDisplay}
+              </Badge>
+              <Badge tone={STATUS_TONES[request.status?.toLowerCase()] ?? 'slate'}>
+                {request.status?.toUpperCase()}
+              </Badge>
+            </div>
           }
         />
       </div>
 
       <div className="mb-3">
         <DetailList items={[
-          ['Goal / Topic', request.careerGoal || 'Guidance requested'],
+          ['Requester Role', roleDisplay],
+          ['Career Goal', request.careerGoal || 'Guidance requested'],
           ['Focus Area', request.areaOfInterest || request.interestArea || 'General Mentorship'],
           ['Preferred Mode', modeLabel],
           ['Submitted', formatDate(request.createdAt)],
@@ -393,7 +418,7 @@ function StudentRequestCard({ request, onRespond, busy }) {
               onClick={() => onRespond(request.id, 'ACCEPTED', note)}
               disabled={busy}
             >
-              {busy ? 'Processing...' : (request.isProfessor ? 'Accept advising' : 'Accept request')}
+              {busy ? 'Processing...' : 'Accept'}
             </Button>
             <Button
               variant="secondary"
@@ -403,7 +428,7 @@ function StudentRequestCard({ request, onRespond, busy }) {
               Decline
             </Button>
             <Link to={`/alumni/${peer?.id}`} className="ml-auto">
-              <Button variant="ghost">View student profile →</Button>
+              <Button variant="ghost">View {roleDisplay.toLowerCase()} profile →</Button>
             </Link>
           </div>
         </div>
@@ -411,11 +436,11 @@ function StudentRequestCard({ request, onRespond, busy }) {
         <div className={cx(ROW, 'mt-4 border-t border-swiss-border pt-3')}>
           {request.status?.toLowerCase() === 'accepted' ? (
             <Link to={`/messages/${peer?.id}`}>
-              <Button size="sm">Message student</Button>
+              <Button size="sm">Message {roleDisplay.toLowerCase()}</Button>
             </Link>
           ) : null}
           <Link to={`/alumni/${peer?.id}`}>
-            <Button size="sm" variant="ghost">View student profile →</Button>
+            <Button size="sm" variant="ghost">View {roleDisplay.toLowerCase()} profile →</Button>
           </Link>
         </div>
       )}
@@ -672,15 +697,28 @@ function MentorshipSettingsTab({ profile, onSaved, busy }) {
   )
 }
 
-function resolveTab(rawTab, isMentor) {
-  if (isMentor) {
+function resolveTab(rawTab, userRole) {
+  const isProf = ['PROFESSOR', 'FACULTY'].includes(userRole)
+  const isAlum = userRole === 'ALUMNI'
+
+  if (isProf) {
     if (rawTab === 'incoming' || rawTab === 'incoming_requests' || rawTab === 'requests') return 'incoming_requests'
     if (rawTab === 'active' || rawTab === 'active_mentees') return 'active_mentees'
     if (rawTab === 'availability' || rawTab === 'settings') return 'availability'
-    if (rawTab === 'find' || rawTab === 'peers') return 'find'
     return 'incoming_requests'
   }
-  if (rawTab === 'find' || rawTab === 'peers') return 'find'
+
+  if (isAlum) {
+    if (rawTab === 'incoming' || rawTab === 'incoming_requests' || rawTab === 'requests') return 'incoming_requests'
+    if (rawTab === 'active' || rawTab === 'active_mentees') return 'active_mentees'
+    if (rawTab === 'find' || rawTab === 'mentors' || rawTab === 'faculty') return 'find'
+    if (rawTab === 'my_requests' || rawTab === 'sent') return 'my_requests'
+    if (rawTab === 'availability' || rawTab === 'settings') return 'availability'
+    return 'incoming_requests'
+  }
+
+  // Student
+  if (rawTab === 'find' || rawTab === 'mentors') return 'find'
   if (rawTab === 'incoming' || rawTab === 'requests' || rawTab === 'my_requests' || rawTab === 'incoming_requests') return 'my_requests'
   if (rawTab === 'active' || rawTab === 'active_mentees') return 'active'
   return 'find'
@@ -693,17 +731,16 @@ export default function Mentorship() {
 
   const userRole = (role || user?.role || user?.roles?.[0] || '').toUpperCase()
   const isProfessor = ['PROFESSOR', 'FACULTY'].includes(userRole)
-  const isMentorRole = ['ALUMNI', 'PROFESSOR', 'FACULTY'].includes(userRole)
+  const isAlumni = userRole === 'ALUMNI'
+  const isMentorRole = isAlumni || isProfessor
 
-  const activeTabsList = isProfessor ? [
-    ['incoming_requests', 'Advising requests'],
-    ['active_mentees', 'Active mentees'],
-    ['availability', 'Faculty settings'],
-    ['find', 'Browse peers'],
-  ] : (isMentorRole ? MENTOR_TABS : STUDENT_TABS)
+  const activeTabsList = isProfessor
+    ? PROFESSOR_TABS
+    : (isAlumni ? ALUMNI_TABS : STUDENT_TABS)
 
   const queryTab = new URLSearchParams(location.search).get('tab')
-  const [tab, setTab] = useState(() => resolveTab(queryTab, isMentorRole))
+  const [tab, setTab] = useState(() => resolveTab(queryTab, userRole))
+  const [roleFilter, setRoleFilter] = useState('all')
 
   const [state, setState] = useState({
     mentors: [],
@@ -719,20 +756,25 @@ export default function Mentorship() {
 
   // Keep tab state synchronized with query param and role changes
   useEffect(() => {
-    const nextTab = resolveTab(queryTab, isMentorRole)
+    const nextTab = resolveTab(queryTab, userRole)
     if (tab !== nextTab) {
       setTab(nextTab)
     }
     if (queryTab !== nextTab) {
       navigate({ pathname: '/mentorship', search: `?tab=${nextTab}` }, { replace: true })
     }
-  }, [queryTab, isMentorRole, navigate, tab])
+  }, [queryTab, userRole, navigate, tab])
 
   const load = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
     try {
+      const mentorsParams = {
+        limit: 50,
+        search: search || undefined,
+        role: userRole === 'ALUMNI' ? 'professor' : (roleFilter !== 'all' ? roleFilter : undefined),
+      }
       const [mentors, requests, mentorships, profileRes] = await Promise.all([
-        mentorship.mentors({ limit: 20, search: search || undefined }),
+        mentorship.mentors(mentorsParams),
         mentorship.requests({ limit: 50 }),
         mentorship.mentorships({ limit: 50 }),
         profiles.me().catch(() => ({ data: null })),
@@ -748,7 +790,7 @@ export default function Mentorship() {
     } catch (error) {
       setState((prev) => ({ ...prev, loading: false, error }))
     }
-  }, [search])
+  }, [search, userRole, roleFilter])
 
   useEffect(() => { load() }, [load])
 
@@ -781,15 +823,37 @@ export default function Mentorship() {
     ? state.mentorships.filter((m) => m.status?.toLowerCase() === 'active' && m.role === 'mentor')
     : activeMentorships
 
-  const badges = isMentorRole
-    ? {
-      incoming_requests: pendingIncomingCount,
-      active_mentees: activeMentees.length,
-    }
-    : {
-      my_requests: pendingOutgoingCount,
-      active: activeMentorships.length,
-    }
+  const availableMentors = useMemo(() => {
+    return state.mentors.filter((m) => {
+      // 1. Filter out currently logged-in user
+      if (m.id === user?.id) return false
+
+      const mRole = (m.role || (m.isProfessor ? 'professor' : 'alumni')).toLowerCase()
+
+      // 2. If student: only alumni or professor
+      if (userRole === 'STUDENT') {
+        if (!['alumni', 'professor', 'faculty'].includes(mRole)) return false
+        if (roleFilter === 'alumni') return mRole === 'alumni'
+        if (roleFilter === 'professor') return mRole === 'professor' || mRole === 'faculty'
+        return true
+      }
+
+      // 3. If alumni: only professor (never fellow alumni, never students)
+      if (userRole === 'ALUMNI') {
+        return mRole === 'professor' || mRole === 'faculty'
+      }
+
+      // 4. Other roles: never peer-role or self
+      return mRole !== userRole.toLowerCase()
+    })
+  }, [state.mentors, user?.id, userRole, roleFilter])
+
+  const badges = {
+    incoming_requests: pendingIncomingCount,
+    my_requests: pendingOutgoingCount,
+    active_mentees: activeMentees.length,
+    active: activeMentorships.length,
+  }
 
   return (
     <div className={STACK}>
@@ -835,17 +899,19 @@ export default function Mentorship() {
       {state.error ? <Card><ErrorState error={state.error} onRetry={load} /></Card> : null}
 
       {/* ========================================================
-          ALUMNI / PROFESSOR TAB 1: INCOMING STUDENT REQUESTS
+          ALUMNI / PROFESSOR TAB 1: INCOMING REQUESTS
           ======================================================== */}
       {isMentorRole && tab === 'incoming_requests' ? (
         <div className={STACK}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-swiss-border pb-3">
             <div>
               <h2 className="text-base font-bold text-swiss-text uppercase tracking-wide">
-                Incoming Student Requests
+                {isProfessor ? 'Incoming Advising Requests' : 'Incoming Mentorship Requests'}
               </h2>
               <p className="text-sm text-swiss-muted mt-1">
-                Review and respond to mentorship applications specifically directed to you by students.
+                {isProfessor
+                  ? 'Review and respond to academic advising and research guidance requests directed to you by students and alumni.'
+                  : 'Review and respond to incoming mentorship applications specifically directed to you.'}
               </p>
             </div>
             <span className="font-mono text-xs text-swiss-label">
@@ -853,13 +919,13 @@ export default function Mentorship() {
             </span>
           </div>
 
-          {state.loading ? <Card><LoadingBlock rows={4} label="Loading student requests" /></Card> : null}
+          {state.loading ? <Card><LoadingBlock rows={4} label="Loading incoming requests" /></Card> : null}
 
           {!state.loading && incomingRequests.length === 0 ? (
             <Card className="p-8">
               <EmptyState
-                title="No incoming student requests"
-                description="You currently have no pending mentorship applications from students awaiting your review."
+                title="No incoming mentorship requests"
+                description="You currently have no pending mentorship applications awaiting your review."
                 action={
                   <Button variant="secondary" onClick={() => changeTab('availability')}>
                     Review availability settings →
@@ -957,52 +1023,85 @@ export default function Mentorship() {
       ) : null}
 
       {/* ========================================================
-          STUDENT TAB 1: FIND A MENTOR (or ALUMNI peer browser)
+          DISCOVERY TAB: FIND A MENTOR (STUDENT or ALUMNI)
           ======================================================== */}
       {tab === 'find' ? (
         <div className={STACK}>
           <div className="border-b border-swiss-border pb-3">
             <h2 className="text-base font-bold text-swiss-text uppercase tracking-wide">
-              {isMentorRole ? 'Browse Mentors & Peers' : 'Find a mentor'}
+              {userRole === 'ALUMNI' ? 'Find Faculty Mentors & Research Advisors' : 'Find a mentor'}
             </h2>
             <p className="text-sm text-swiss-muted mt-1">
-              {isMentorRole
-                ? 'Explore fellow mentors, faculty, and industry leaders within the alumni network.'
-                : 'Explore experienced alumni and faculty, review their expertise, and request guidance for your career or studies.'}
+              {userRole === 'ALUMNI'
+                ? 'Connect with university professors and senior faculty members for academic research, doctoral guidance, and institutional collaboration.'
+                : 'Explore experienced alumni and university faculty, review their expertise, and request guidance for your career or studies.'}
             </p>
           </div>
 
-          <Card className="p-4">
+          <Card className="p-4 space-y-3">
             <form className={ROW} onSubmit={(e) => { e.preventDefault(); load() }}>
               <div className="min-w-64 flex-1">
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name, company, skill or industry"
+                  placeholder={userRole === 'ALUMNI' ? 'Search professors by name, department, or research domain' : 'Search by name, company, skill or industry'}
                   aria-label="Search mentors"
                 />
               </div>
               <Button type="submit">Search</Button>
             </form>
+
+            {/* Role Filter Pills for Students */}
+            {userRole === 'STUDENT' ? (
+              <div className="flex items-center gap-2 pt-2 border-t border-swiss-border">
+                <span className="text-xs font-mono uppercase text-swiss-label font-bold">Role Filter:</span>
+                {[
+                  ['all', 'All Mentors (Alumni & Faculty)'],
+                  ['alumni', 'Alumni Mentors'],
+                  ['professor', 'University Professors'],
+                ].map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setRoleFilter(val)}
+                    className={cx(
+                      'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                      roleFilter === val
+                        ? 'bg-slate-900 text-white font-bold'
+                        : 'bg-swiss-surface text-swiss-muted ring-1 ring-swiss-border hover:bg-swiss-surface-hover'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </Card>
 
           {state.loading ? <Card><LoadingBlock rows={4} label="Finding available mentors" /></Card> : null}
 
-          {!state.loading && state.mentors.length === 0 ? (
+          {!state.loading && availableMentors.length === 0 ? (
             <Card>
               <EmptyState
-                title="No mentors available"
-                description="Nobody matches that search query yet. Try a broader search term or clear the filter."
+                title={userRole === 'ALUMNI' ? 'No faculty mentors available' : 'No mentors available'}
+                description={
+                  userRole === 'ALUMNI'
+                    ? 'No university professors match your search criteria. Try a broader search term or clear the filter.'
+                    : 'Nobody matches that search query yet. Try a broader search term or clear the filter.'
+                }
               />
             </Card>
           ) : null}
 
           <div className={GRID}>
-            {state.mentors.map((mentor) => (
+            {availableMentors.map((mentor) => (
               <MentorCard
                 key={mentor.id}
                 mentor={mentor}
-                isPeer={isMentorRole}
+                canRequest={
+                  (userRole === 'STUDENT' && ['alumni', 'professor', 'faculty'].includes((mentor.role || '').toLowerCase())) ||
+                  (userRole === 'ALUMNI' && ['professor', 'faculty'].includes((mentor.role || '').toLowerCase()))
+                }
                 onRequested={load}
               />
             ))}
@@ -1011,9 +1110,9 @@ export default function Mentorship() {
       ) : null}
 
       {/* ========================================================
-          STUDENT TAB 2: MY REQUESTS (SENT REQUESTS)
+          MY REQUESTS (SENT REQUESTS FOR STUDENT & ALUMNI)
           ======================================================== */}
-      {!isMentorRole && tab === 'my_requests' ? (
+      {tab === 'my_requests' ? (
         <div className={STACK}>
           <div className="border-b border-swiss-border pb-3">
             <h2 className="text-base font-bold text-swiss-text uppercase tracking-wide">

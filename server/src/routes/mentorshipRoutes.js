@@ -26,6 +26,7 @@ const mentorsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   search: z.string().trim().max(120).optional(),
   industry: z.string().trim().max(120).optional(),
+  role: z.string().trim().max(50).optional(),
 })
 
 const endMentorshipSchema = z.object({

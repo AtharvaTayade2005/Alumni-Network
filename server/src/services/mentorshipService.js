@@ -106,9 +106,18 @@ export async function requestMentorship(menteeId, payload, context = {}) {
   if (await connectionService.isBlockedEitherWay(menteeId, mentorId)) {
     throw forbidden('This member is not available for mentorship')
   }
+
   const connectionState = await connectionService.getRequestState(menteeId, mentorId)
   if (!mentor.is_professor && connectionState !== 'connected') {
     throw badRequest('Connect with this member before requesting mentorship')
+  }
+
+  // The email & notification names the mentee, so the sender has to be read too.
+  const mentee = await userModel.findById(menteeId)
+  const menteeRoles = mentee?.roles?.map((r) => r.toLowerCase()) || []
+  const isMenteeAlumni = menteeRoles.includes('alumni')
+  if (isMenteeAlumni && !mentor.is_professor) {
+    throw badRequest('Alumni members can only request mentorship from University Professors.')
   }
 
   const created = await mentorshipModel.createRequest({
@@ -119,21 +128,23 @@ export async function requestMentorship(menteeId, payload, context = {}) {
   // ON CONFLICT guard then matches nothing and returns no row.
   if (!created) throw conflict('A mentorship request already exists for this pair')
 
-  // The email names the mentee, so the sender has to be read too. This is outside
-  // the notification's own work on purpose: notify() writes on the shared pool here
-  // (no transaction), and the PGlite dev database is single-session.
-  const mentee = await userModel.findById(menteeId)
+  const menteeFullName = mentee ? (mentee.full_name || `${mentee.first_name} ${mentee.last_name}`.trim()) : 'A member'
+  const rawRole = mentee?.role || menteeRoles[0] || 'student'
+  const requesterRole = rawRole.charAt(0).toUpperCase() + rawRole.slice(1).toLowerCase()
 
-  await notificationService.notify({
+  await notificationService.createNotification({
+    user_id: mentorId,
     userId: mentorId,
     type: 'mentorship_request',
-    title: 'New mentorship request',
-    body: `${interestArea} - a member is asking for guidance.`,
+    title: 'New Mentorship Request',
+    message: `${menteeFullName} (${requesterRole}) has sent you a mentorship request.`,
+    body: `${menteeFullName} (${requesterRole}) has sent you a mentorship request.`,
     link: '/mentorship',
-    actorId: menteeId,
+    reference_id: created.id,
+    actor_id: menteeId,
     email: mentor.email,
     emailPayload: {
-      menteeName: mentee ? `${mentee.first_name} ${mentee.last_name}` : 'A member',
+      menteeName: menteeFullName,
       area: interestArea,
     },
   })
@@ -180,7 +191,9 @@ export async function respondToRequest(mentorId, requestId, payload, context = {
   // transaction for the single development connection.
   const mentee = await userModel.findById(request.mentee_id)
   const mentor = await userModel.findById(request.mentor_id)
-  const mentorName = mentor ? `${mentor.first_name} ${mentor.last_name}` : 'Your mentor'
+  const mentorName = mentor ? (mentor.full_name || `${mentor.first_name} ${mentor.last_name}`.trim()) : 'Your mentor'
+  const mentorRawRole = mentor?.role || mentor?.roles?.[0] || 'mentor'
+  const mentorRole = mentorRawRole.charAt(0).toUpperCase() + mentorRawRole.slice(1).toLowerCase()
 
   const { relationship, notification } = await withTransaction(async (db) => {
     if (accepted) {
@@ -200,17 +213,22 @@ export async function respondToRequest(mentorId, requestId, payload, context = {
       }, db)
       : null
 
-    const sent = await notificationService.notify({
+    const statusMsg = accepted
+      ? `${mentorName} (${mentorRole}) accepted your mentorship request.`
+      : (payload.responseNote || `${mentorName} (${mentorRole}) declined your mentorship request.`)
+
+    const sent = await notificationService.createNotification({
+      user_id: request.mentee_id,
       userId: request.mentee_id,
       type: accepted ? 'mentorship_accepted' : 'mentorship_declined',
       title: accepted
-        ? 'Mentorship request accepted'
-        : 'Mentorship request declined',
-      body: accepted
-        ? 'Your mentor accepted. Open Mentorship to start in touch.'
-        : payload.responseNote || 'The mentor was not available at this time.',
+        ? 'Mentorship Request Accepted'
+        : 'Mentorship Request Declined',
+      message: statusMsg,
+      body: statusMsg,
       link: '/mentorship',
-      actorId: mentorId,
+      reference_id: requestId,
+      actor_id: mentorId,
       email: mentee?.email ?? null,
       emailPayload: accepted
         ? { mentorName }
@@ -466,8 +484,8 @@ export async function completeMentorship(userId, relationshipId, context = {}) {
   return mentorshipModel.formatRelationship(updated, userId)
 }
 
-/** Alumni who have opted in and still have capacity, for the discovery screen. */
-export async function findAvailableMentors(viewerId, { search, industry, limit = 20, offset = 0 }) {
+/** Alumni and professors who have opted in and still have capacity, for the discovery screen. */
+export async function findAvailableMentors(viewerId, { search, industry, role, viewerRole, limit = 20, offset = 0 } = {}) {
   const conditions = [
     'u.id <> $1',
     'u.is_active',
@@ -476,6 +494,42 @@ export async function findAvailableMentors(viewerId, { search, industry, limit =
     'ap.verification_status = \'verified\'',
   ]
   const params = [viewerId]
+
+  // Role discovery hierarchy:
+  // - Students see Alumni & Professors
+  // - Alumni see Professors only (no peer-role)
+  const vRole = (viewerRole || '').toUpperCase()
+  if (vRole === 'ALUMNI') {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = u.id AND LOWER(r.name) IN ('professor', 'faculty')
+    )`)
+  } else if (vRole === 'STUDENT') {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = u.id AND LOWER(r.name) IN ('alumni', 'professor', 'faculty')
+    )`)
+  }
+
+  // Explicit role query filter
+  if (role) {
+    const filterRole = role.toLowerCase()
+    if (filterRole === 'professor' || filterRole === 'faculty') {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id AND LOWER(r.name) IN ('professor', 'faculty')
+      )`)
+    } else if (filterRole === 'alumni') {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id AND LOWER(r.name) = 'alumni'
+      )`)
+    }
+  }
 
   if (search) {
     params.push(`%${search}%`)
@@ -493,6 +547,13 @@ export async function findAvailableMentors(viewerId, { search, industry, limit =
     `SELECT u.id, u.first_name, u.last_name, u.avatar_url,
             ap.current_company, ap.current_position, ap.industry, ap.degree,
             ap.graduation_year, ap.bio, ap.mentorship_capacity,
+            COALESCE((
+              SELECT LOWER(r.name) FROM user_roles ur
+              JOIN roles r ON r.id = ur.role_id
+              WHERE ur.user_id = u.id
+              ORDER BY CASE WHEN LOWER(r.name) IN ('professor', 'faculty') THEN 1 WHEN LOWER(r.name) = 'alumni' THEN 2 ELSE 3 END
+              LIMIT 1
+            ), 'alumni') AS role,
             (SELECT COUNT(*)::int FROM mentorship_relationships r
               WHERE r.mentor_id = u.id AND r.status = 'active') AS active_count
      FROM users u
@@ -510,18 +571,27 @@ export async function findAvailableMentors(viewerId, { search, industry, limit =
   )
 
   return {
-    rows: rows.map((r) => ({
-      id: r.id,
-      name: `${r.first_name} ${r.last_name}`,
-      avatarUrl: r.avatar_url,
-      currentCompany: r.current_company,
-      currentPosition: r.current_position,
-      industry: r.industry,
-      degree: r.degree,
-      graduationYear: r.graduation_year,
-      bio: r.bio,
-      openSlots: Math.max(0, (r.mentorship_capacity ?? 1) - r.active_count),
-    })),
+    rows: rows.map((r) => {
+      const isProf = ['professor', 'faculty'].includes((r.role || '').toLowerCase())
+      return {
+        id: r.id,
+        name: `${r.first_name} ${r.last_name}`,
+        avatarUrl: r.avatar_url,
+        currentCompany: r.current_company,
+        currentPosition: r.current_position,
+        industry: r.industry,
+        degree: r.degree,
+        graduationYear: r.graduation_year,
+        bio: r.bio,
+        role: isProf ? 'professor' : 'alumni',
+        isProfessor: isProf,
+        isAlumni: !isProf,
+        openSlots: Math.max(0, (r.mentorship_capacity ?? 1) - r.active_count),
+      }
+    }),
     total: counts[0].c,
   }
 }
+
+export const createMentorshipRequest = requestMentorship
+

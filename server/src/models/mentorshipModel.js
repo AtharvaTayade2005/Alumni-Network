@@ -21,7 +21,8 @@ const PEER_COLUMNS = `
   ap.graduation_year AS peer_graduation_year,
   sp.degree AS student_degree,
   sp.department AS student_department,
-  sp.year_of_study AS student_year_of_study
+  sp.year_of_study AS student_year_of_study,
+  (SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id ORDER BY CASE WHEN LOWER(r.name) = 'student' THEN 1 WHEN LOWER(r.name) = 'alumni' THEN 2 WHEN LOWER(r.name) IN ('professor', 'faculty') THEN 3 ELSE 4 END LIMIT 1) AS peer_role
 `
 
 const PEER_JOINS = `
@@ -319,6 +320,7 @@ export function formatRequest(row, viewerId) {
       degree: row.student_degree || row.peer_company,
       department: row.student_department,
       yearOfStudy: row.student_year_of_study,
+      role: row.peer_role || (row.student_degree || row.student_department ? 'Student' : 'Alumni'),
     } : null,
   }
 }

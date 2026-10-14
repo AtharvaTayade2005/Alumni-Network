@@ -114,20 +114,48 @@ export async function emitStored(userId, notification) {
 }
 
 
+export async function createNotification(payload = {}) {
+  const userId = payload.user_id ?? payload.userId
+  const actorId = payload.actor_id ?? payload.actorId ?? null
+  const type = payload.type
+  const title = payload.title
+  const body = payload.message ?? payload.body ?? null
+  const link = payload.link ?? (payload.reference_id ? '/mentorship' : null)
+  const metadata = payload.metadata ?? (payload.reference_id || payload.referenceId ? { referenceId: payload.reference_id || payload.referenceId } : null)
+
+  return notify({
+    userId,
+    type,
+    title,
+    body,
+    link,
+    actorId,
+    metadata,
+    db: payload.db ?? null,
+    email: payload.email ?? null,
+    emailPayload: payload.emailPayload ?? null,
+    dedupeKey: payload.dedupeKey ?? null,
+  })
+}
+
 export function formatNotification(row) {
   return {
     id: row.id,
     type: row.type,
     title: row.title,
     body: row.body,
+    message: row.body,
     link: row.link,
     actorId: row.actor_id,
+    actor_id: row.actor_id,
     isRead: row.is_read,
+    is_read: row.is_read,
     // Whatever the creator attached: an event id, a job id, a thread id. It is
     // what lets a client act on a notification without parsing the link, which
     // is brittle the moment the client changes its routing.
     metadata: row.metadata ?? null,
     createdAt: row.created_at,
+    created_at: row.created_at,
   }
 }
 

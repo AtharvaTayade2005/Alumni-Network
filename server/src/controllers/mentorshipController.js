@@ -99,9 +99,10 @@ export const completeById = asyncHandler(async (req, res) => {
 export const complete = completeById
 
 export const findMentors = asyncHandler(async (req, res) => {
-  const { page, limit, search, industry } = getQuery(req)
+  const { page, limit, search, industry, role } = getQuery(req)
+  const viewerRole = req.user?.role || req.user?.roles?.[0] || 'student'
   const { rows, total } = await mentorshipService.findAvailableMentors(
-    req.user.id, { search, industry, limit, offset: (page - 1) * limit },
+    req.user.id, { search, industry, role, viewerRole, limit, offset: (page - 1) * limit },
   )
   paginated(res, rows, { page, limit, total })
 })

@@ -112,28 +112,29 @@ export const mentorshipRequestSchema = z.preprocess((raw) => {
   }
 
   // Harmonize areaOfInterest vs interestArea vs area_of_interest / topics / topic / focusArea
-  let area = input.interestArea || input.areaOfInterest || input.area_of_interest || input.topic || input.focusArea
-  if (!area && input.topics) {
-    if (Array.isArray(input.topics)) {
-      area = input.topics.filter(Boolean).join(', ')
-    } else if (typeof input.topics === 'string') {
-      area = input.topics.trim()
-    }
-  }
-  if (Array.isArray(area)) {
-    area = area.filter(Boolean).join(', ')
-  }
-  if (typeof area === 'string' && area.trim()) {
-    area = area.trim()
+  if (input.interestArea && input.areaOfInterest && input.interestArea !== input.areaOfInterest) {
+    // Keep both distinct so superRefine will catch the conflicting spellings
   } else {
-    area = 'General Mentorship'
-  }
-
-  input.interestArea = area
-  input.areaOfInterest = area
-  input.area_of_interest = area
-  if (!input.topics) {
-    input.topics = [area]
+    let area = input.interestArea || input.areaOfInterest || input.area_of_interest || input.topic || input.focusArea
+    if (!area && input.topics) {
+      if (Array.isArray(input.topics)) {
+        area = input.topics.filter(Boolean).join(', ')
+      } else if (typeof input.topics === 'string') {
+        area = input.topics.trim()
+      }
+    }
+    if (Array.isArray(area)) {
+      area = area.filter(Boolean).join(', ')
+    }
+    if (typeof area === 'string' && area.trim()) {
+      area = area.trim()
+      input.interestArea = area
+      input.areaOfInterest = area
+      input.area_of_interest = area
+      if (!input.topics) {
+        input.topics = [area]
+      }
+    }
   }
 
   // Frequency
@@ -141,13 +142,17 @@ export const mentorshipRequestSchema = z.preprocess((raw) => {
   input.preferred_frequency = input.frequency
 
   // Normalize preferredMode / preferredCommunication / preferred_mode / mode
-  const rawMode = input.preferredCommunication || input.preferredMode || input.preferred_mode || input.mode
-  if (typeof rawMode === 'string') {
-    const lower = rawMode.toLowerCase().trim()
-    const mapped = (lower === 'in_person' || lower === 'any' || lower === 'no_preference') ? 'video' : lower
-    input.preferredMode = mapped
-    input.preferredCommunication = mapped
-    input.preferred_mode = mapped
+  if (input.preferredCommunication && input.preferredMode && input.preferredCommunication !== input.preferredMode) {
+    // Keep both distinct so superRefine will catch the conflicting spellings
+  } else {
+    const rawMode = input.preferredCommunication || input.preferredMode || input.preferred_mode || input.mode
+    if (typeof rawMode === 'string') {
+      const lower = rawMode.toLowerCase().trim()
+      const mapped = (lower === 'in_person' || lower === 'any' || lower === 'no_preference') ? 'video' : lower
+      input.preferredMode = mapped
+      input.preferredCommunication = mapped
+      input.preferred_mode = mapped
+    }
   }
 
   // Harmonize message vs notes / note
@@ -183,6 +188,21 @@ export const mentorshipRequestSchema = z.preprocess((raw) => {
       code: z.ZodIssueCode.custom,
       path: ['interestArea'],
       message: 'interestArea is required',
+    })
+  }
+  if (data.interestArea && data.areaOfInterest && data.interestArea !== data.areaOfInterest) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['areaOfInterest'],
+      message: 'interestArea and areaOfInterest disagree; send only one',
+    })
+  }
+  if (data.preferredCommunication && data.preferredMode
+      && data.preferredCommunication !== data.preferredMode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['preferredMode'],
+      message: 'preferredCommunication and preferredMode disagree; send only one',
     })
   }
 }))

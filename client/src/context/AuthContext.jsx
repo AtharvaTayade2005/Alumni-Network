@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
     }
     try {
       const res = await notifications.unreadCount()
-      setUnreadCount(res.data?.count ?? 0)
+      setUnreadCount(res.data?.unread ?? res.data?.count ?? 0)
     } catch {
       setUnreadCount(0)
     }

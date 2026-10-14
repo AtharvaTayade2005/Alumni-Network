@@ -16,7 +16,7 @@ export const list = asyncHandler(async (req, res) => {
 
 export const unreadCount = asyncHandler(async (req, res) => {
   const count = await notificationService.unreadCount(req.user.id)
-  sendSuccess(res, { unread: count })
+  sendSuccess(res, { unread: count, count })
 })
 
 export const markRead = asyncHandler(async (req, res) => {

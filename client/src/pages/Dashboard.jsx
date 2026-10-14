@@ -2,22 +2,26 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  profiles, jobs, mentorship, events, donations, admin, notifications, announcements
+  profiles, jobs, mentorship, events, donations, admin, notifications, announcements, ai
 } from '../services/api.js'
 import { ROLES, ROLE_LABELS } from '../utils/roles.js'
 import {
   Avatar, Badge, Button, Card, CardHeader, EmptyState, ErrorState, LoadingBlock
 } from '../components/ui.jsx'
 
-function StatTile({ label, value, hint, to }) {
+function StatTile({ label, value, hint, to, action }) {
+  const isLongText = typeof value === 'string' && value.length > 5
   const body = (
     <>
       <p className="font-mono text-[10px] tracking-widest text-swiss-label uppercase">{label}</p>
-      <p className="mt-2 text-3xl font-bold tracking-tight text-swiss-text">{value}</p>
+      <div className={`mt-2 font-bold tracking-tight text-swiss-text ${isLongText ? 'text-2xl text-swiss-muted' : 'text-3xl'}`}>
+        {value}
+      </div>
       {hint ? <p className="mt-1 font-mono text-[10px] text-swiss-muted uppercase">{hint}</p> : null}
+      {action ? <div className="mt-3 pt-2 border-t border-swiss-border/60">{action}</div> : null}
     </>
   )
-  return to ? (
+  return to && !action ? (
     <Link
       to={to}
       className="rounded-sm border border-swiss-border bg-swiss-surface p-5 transition-colors hover:bg-swiss-surface-hover block"
@@ -47,6 +51,7 @@ export default function Dashboard() {
     donationHistory: [],
     recommendedMentors: [],
     announcements: [],
+    readinessScore: null,
   })
 
   async function loadDashboard() {
@@ -65,6 +70,7 @@ export default function Dashboard() {
         donationsRes,
         mentorsRes,
         annRes,
+        roadmapRes,
       ] = await Promise.all([
         profiles.me(),
         jobs.list({ limit: 4 }),
@@ -77,7 +83,25 @@ export default function Dashboard() {
         role === ROLES.ALUMNI ? donations.history(user?.id) : Promise.resolve({ data: [] }),
         role === ROLES.STUDENT ? mentorship.mentors({ limit: 4 }) : Promise.resolve({ data: [] }),
         announcements.list({ limit: 3 }).catch(() => ({ data: [] })),
+        role === ROLES.STUDENT ? ai.getRoadmap().catch(() => null) : Promise.resolve(null),
       ])
+
+      let computedScore = null
+      const roadmap = roadmapRes && 'data' in roadmapRes ? roadmapRes.data : roadmapRes
+      if (typeof roadmap?.readinessScore === 'number' && roadmap.readinessScore > 0) {
+        computedScore = roadmap.readinessScore
+      } else if (typeof profRes.data?.student?.readinessScore === 'number' && profRes.data.student.readinessScore > 0) {
+        computedScore = profRes.data.student.readinessScore
+      } else {
+        try {
+          const cached = sessionStorage.getItem('anp.readinessScore')
+          if (cached && !isNaN(Number(cached)) && Number(cached) > 0) {
+            computedScore = Number(cached)
+          }
+        } catch {
+          /* ignore */
+        }
+      }
 
       setData({
         profile: profRes.data,
@@ -91,6 +115,7 @@ export default function Dashboard() {
         donationHistory: donationsRes.data || [],
         recommendedMentors: mentorsRes.data || [],
         announcements: annRes.data || [],
+        readinessScore: computedScore,
       })
       setLoading(false)
     } catch (err) {
@@ -185,7 +210,27 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {role === ROLES.STUDENT && (
           <>
-            <StatTile label="Career Readiness" value={`${student?.readinessScore || 84}%`} hint="Based on active resume" to="/resume" />
+            {typeof data.readinessScore === 'number' ? (
+              <StatTile
+                label="Career Readiness"
+                value={`${data.readinessScore}%`}
+                hint="BASED ON ACTIVE RESUME"
+                to="/job-readiness"
+              />
+            ) : (
+              <StatTile
+                label="Career Readiness"
+                value="Not Analyzed"
+                action={
+                  <Link
+                    to="/job-readiness"
+                    className="inline-flex items-center text-xs font-semibold text-swiss-text hover:text-swiss-accent underline underline-offset-2 transition-colors"
+                  >
+                    Calculate Readiness →
+                  </Link>
+                }
+              />
+            )}
             <StatTile label="Active Applications" value={data.myApps.length} hint="View status tracker" to="/jobs/applications" />
             <StatTile label="Active Mentorships" value={activeMentorshipsCount} hint="1-on-1 alumni sessions" to="/mentorship?tab=active" />
             <StatTile label="Upcoming Events" value={data.upcomingEvents.length} hint="RSVP confirmed" to="/events" />
