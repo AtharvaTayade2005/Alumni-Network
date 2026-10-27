@@ -82,7 +82,9 @@ export default function JobReadiness() {
       if (typeof result?.readinessScore === 'number') {
         try {
           sessionStorage.setItem('anp.readinessScore', String(result.readinessScore))
-        } catch {}
+        } catch {
+          // ignore storage failure
+        }
       }
       if (result?.roadmap) {
         setRoadmapData(result.roadmap)
@@ -120,7 +122,9 @@ export default function JobReadiness() {
       if (typeof newRoadmap?.readinessScore === 'number') {
         try {
           sessionStorage.setItem('anp.readinessScore', String(newRoadmap.readinessScore))
-        } catch {}
+        } catch {
+          // ignore storage failure
+        }
       }
       if (newRoadmap) {
         setReadinessData((prev) => (prev ? { ...prev, roadmap: newRoadmap } : prev))

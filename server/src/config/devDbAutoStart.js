@@ -82,7 +82,7 @@ export async function ensureDevDatabase() {
           const { default: path } = await import('node:path')
           const { fileURLToPath } = await import('node:url')
           const here = path.dirname(fileURLToPath(import.meta.url))
-          const migrationsDir = path.resolve(here, '../../../../database/migrations')
+          const migrationsDir = path.resolve(here, '../../../database/migrations')
           if (fs.existsSync(migrationsDir)) {
             const files = fs.readdirSync(migrationsDir)
               .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))

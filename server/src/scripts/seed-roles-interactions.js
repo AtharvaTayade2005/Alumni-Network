@@ -10,9 +10,8 @@
 
 import 'dotenv/config'
 import bcrypt from 'bcrypt'
-import { query, closePool, withTransaction } from '../config/database.js'
+import { query, closePool } from '../config/database.js'
 import { ensureDevDatabase } from '../config/devDbAutoStart.js'
-import logger from '../utils/logger.js'
 
 const SHARED_PASSWORD = 'Password123!'
 const BCRYPT_ROUNDS = 10

@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { after, afterEach, before, describe, it } from 'node:test'
+import { after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import { startTestDatabase, stopTestDatabase } from './helpers/testDatabase.js'

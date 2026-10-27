@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { resumes, jobs, events } from './api.real.js'
+import { describe, it, expect } from 'vitest'
+import { resumes } from './api.real.js'
 
 describe('Client Vitest: Task 1 - Resume Upload & Validation', () => {
   it('TC-RESUME-01: validates file size limits (rejects > 5MB)', () => {

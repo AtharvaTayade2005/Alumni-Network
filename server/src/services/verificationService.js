@@ -1,5 +1,5 @@
 import { query, withTransaction } from '../config/database.js'
-import { badRequest, conflict, notFound } from '../utils/errors.js'
+import { badRequest, notFound } from '../utils/errors.js'
 
 /**
  * Alumni verification.

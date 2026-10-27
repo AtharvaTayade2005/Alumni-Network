@@ -136,7 +136,7 @@ export default function Dashboard() {
     return <Card><ErrorState error={error} onRetry={loadDashboard} /></Card>
   }
 
-  const { student, alumni, professor } = data.profile || {}
+  const { alumni } = data.profile || {}
   const pendingRequestsCount = data.mentorshipRequests.filter((r) => r.direction === 'incoming' && r.status === 'pending').length
   const activeMentorshipsCount = data.activeMentorships.filter((m) => m.status === 'active').length
 

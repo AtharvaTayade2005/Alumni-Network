@@ -27,6 +27,7 @@ export function cosineSimilarity(vecA, vecB) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB))
 }
 
+import { query } from '../../config/database.js'
 import config from '../../config/env.js'
 import logger from '../../utils/logger.js'
 import { TestProvider } from './providers/testProvider.js'
