@@ -69,30 +69,10 @@ export async function ensureDevDatabase() {
 
       // Verify migrations and ensure demo accounts exist for development
       try {
-        const { query } = await import('./database.js')
-        await query(`
-          CREATE TABLE IF NOT EXISTS schema_migrations (
-            filename VARCHAR(255) PRIMARY KEY,
-            applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-          )
-        `)
-        const migCount = await query('SELECT count(*)::int as c FROM schema_migrations')
-        if (migCount.rows[0].c === 0) {
-          const { default: fs } = await import('node:fs')
-          const { default: path } = await import('node:path')
-          const { fileURLToPath } = await import('node:url')
-          const here = path.dirname(fileURLToPath(import.meta.url))
-          const migrationsDir = path.resolve(here, '../../../database/migrations')
-          if (fs.existsSync(migrationsDir)) {
-            const files = fs.readdirSync(migrationsDir)
-              .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
-              .sort()
-            for (const file of files) {
-              await query('INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING', [file])
-            }
-          }
-        }
+        const { default: runMigrations } = await import('../scripts/migrate.js')
+        await runMigrations({ up: true })
 
+        const { query } = await import('./database.js')
         const hasDemo = await query("SELECT 1 FROM users WHERE email = 'admin.demo@alumniportal.test' LIMIT 1")
         if (hasDemo.rows.length === 0) {
           logger.info('Demo user accounts missing in development; auto-seeding demo accounts...')
